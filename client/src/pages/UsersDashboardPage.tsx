@@ -142,12 +142,7 @@ export const UsersDashboardPage: React.FC = () => {
 
       <main className="dashboard-content">
         <div className="dashboard-header">
-          <div>
-            <h2 className="page-title">Users Directory</h2>
-            <p className="page-subtitle">
-              Manage accounts and view profile information with fine-grained access control.
-            </p>
-          </div>
+          <h2 className="page-title">Users Directory</h2>
 
           {isAdmin && (
             <button

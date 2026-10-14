@@ -8,10 +8,7 @@ export const Navbar: React.FC = () => {
       <div className="navbar-container">
         <div className="navbar-brand">
           <div className="brand-logo">US</div>
-          <div>
-            <h1 className="brand-title">User Service</h1>
-            <span className="brand-subtitle">Rails 8 API + React SPA</span>
-          </div>
+          <h1 className="brand-title">User Service</h1>
         </div>
 
         {user && (

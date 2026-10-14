@@ -44,9 +44,6 @@ export const LoginPage: React.FC = () => {
         <div className="login-header">
           <div className="login-logo">US</div>
           <h2>Sign in to User Service</h2>
-          <p className="login-subtitle">
-            Secure asymmetric RS256 JWT &bull; Pundit RBAC & ABAC
-          </p>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}

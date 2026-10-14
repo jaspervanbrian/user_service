@@ -56,7 +56,7 @@ export const LoginPage: React.FC = () => {
               type="text"
               required
               autoFocus
-              placeholder="e.g. ada@example.com or MikeM"
+              placeholder="e.g. ada.admin@example.com or AdaAdmin"
               value={loginIdentifier}
               onChange={(e) => setLoginIdentifier(e.target.value)}
             />
@@ -85,16 +85,16 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => quickFill('ada@example.com', 'password123')}
+              onClick={() => quickFill('ada.admin@example.com', 'password123')}
             >
-              🔑 Login as Admin (Ada)
+              🔑 Login as Admin (Ada Lovelace)
             </button>
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => quickFill('MikeM', 'password123')}
+              onClick={() => quickFill('grace.hopper@example.com', 'password123')}
             >
-              👤 Login as Member (Mike)
+              👤 Login as Member (Grace Hopper)
             </button>
           </div>
         </div>

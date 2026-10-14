@@ -160,11 +160,131 @@ curl -X POST http://localhost:3000/api/v1/sessions \
 }
 ```
 
+### 3. List Users (Keyset Cursor Pagination & Custom Page Jumping)
+```sh
+# Fetch initial page (default 20, max 100)
+curl -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/v1/users?limit=10
+
+# Fetch next page using opaque Base64 cursor (0 COUNT(*) queries, O(1) indexed lookup)
+curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limit=10&cursor=eyJpZCI6MTB9"
+
+# Jump directly to custom page number
+curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limit=10&page=3"
+```
+
+**Response (200 OK):**
+```json
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "AdaAdmin",
+      "first_name": "Ada",
+      "last_name": "Admin",
+      "role": "admin",
+      "email": "ada@example.com",
+      "date_of_birth": "1990-01-15",
+      "created_at": "...",
+      "updated_at": "..."
+    }
+  ],
+  "pagination": {
+    "next_cursor": "eyJpZCI6MTB9",
+    "has_next_page": true,
+    "limit": 10,
+    "page": 1
+  }
+}
+```
+*Note:* If viewed by a standard member, other users' `email` and `date_of_birth` fields are omitted completely from the payload.
+
+### 4. Get User Profile
+```sh
+curl -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/v1/users/1
+```
+
+### 5. Create User (Admin Only)
+```sh
+curl -X POST http://localhost:3000/api/v1/users \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": {
+      "first_name": "Grace",
+      "last_name": "Hopper",
+      "username": "ghopper",
+      "email": "grace@example.com",
+      "password": "password123",
+      "password_confirmation": "password123",
+      "role": "member"
+    }
+  }'
+```
+
+### 6. Update User (Self or Admin)
+```sh
+curl -X PATCH http://localhost:3000/api/v1/users/2 \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": {
+      "first_name": "Michael",
+      "last_name": "Updated"
+    }
+  }'
+```
+*Note:* Only administrators are permitted to update `:role`. Role updates from non-admins are filtered out by Pundit.
+
 ---
 
-## Running Tests & Linters
+## High-Performance Bulk Seeding (50k - 100k Records)
 
-- Run the full test suite (43 Minitest runs):
+The app includes an optimized bulk generator in `db/seeds.rb` that seeds 50,000+ users in ~1.9s using a single precomputed BCrypt digest and chunked `User.insert_all`:
+
+```sh
+# Standard fast seed (17 core users)
+bin/rails db:seed
+
+# Bulk dataset generator (50,000 users)
+BULK_SEED=true bin/rails db:seed
+
+# Custom count (e.g. 10,000 users)
+BULK_SEED=true BULK_USERS_COUNT=10000 bin/rails db:seed
+```
+
+---
+
+## React SPA Frontend (`client/`)
+
+The application includes a responsive React SPA built with Vite, TypeScript, and React Router in [`client/`](client/).
+
+### Features:
+- **Authentication Guarding:** Visiting `/` redirects unauthenticated visitors to `/login`. Visiting `/login` while logged in redirects to `/`. Auto-logout on 401.
+- **Quick Demo Logins:** 1-click login buttons for Admin (`ada@example.com` / `password123`) and Member (`MikeM` / `password123`).
+- **ABAC/RBAC Visuals:** Clear policy banners. Private fields (`email`, `date_of_birth`) show a `🔒 Restricted` pill on unauthorized records.
+- **Custom Pagination Footer:** Supports previous / next keyset cursor navigation, per-page limit selection, and a direct page number jump box (`Page [ 3 ] Jump`).
+- **Edit & Create Modals:** Field-level validation error display matching Rails' 422 JSON errors.
+
+### Running the Frontend:
+```sh
+cd client
+bun install   # or npm install
+bun run dev   # or npm run dev
+```
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+### Client Linting & Production Build:
+```sh
+cd client
+bun run lint   # Fast Oxlint validation (0 warnings)
+bun run build  # Typecheck and Vite bundle
+```
+
+---
+
+## Running Backend Tests & Linters
+
+- Run the full test suite (76 Minitest runs):
   ```sh
   bin/rails test
   ```

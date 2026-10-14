@@ -11,7 +11,7 @@ module Auth
       # Accepts an ActionDispatch::Request, rack env hash, or raw token string
       def verify(request_or_token)
         token = extract_token(request_or_token)
-        raise Errors::MissingToken, "Missing Bearer token in Authorization header" if token.blank?
+        raise Errors::MissingToken if token.blank?
 
         options = {
           algorithms: [ "RS256" ],

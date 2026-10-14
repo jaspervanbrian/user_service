@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "openssl"
+
+rsa = OpenSSL::PKey::RSA.generate(2048)
+pem = rsa.to_pem
+single_line = pem.gsub("\n", '\n')
+
+puts "================================================================="
+puts " Generated 2048-bit RSA Keypair"
+puts "================================================================="
+puts ""
+puts "Option 1: Add to .env (single line):"
+puts "JWT_PRIVATE_KEY=\"#{single_line}\""
+puts ""
+puts "Option 2: Add to credentials.yml.enc (multiline):"
+puts "private_key: |"
+pem.each_line { |line| puts "  #{line}" }
+puts "================================================================="

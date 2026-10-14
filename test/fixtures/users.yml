@@ -1,0 +1,27 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+admin:
+  first_name: Ada
+  last_name: Admin
+  email: ada@example.com
+  date_of_birth: 1990-01-15
+  username: AdaAdmin
+  role: admin
+  password_digest: <%= BCrypt::Password.create("password123", cost: BCrypt::Engine::MIN_COST) %>
+
+member:
+  first_name: Mike
+  last_name: Member
+  email: mike@example.com
+  date_of_birth: 1995-06-30
+  username: MikeM
+  role: member
+  password_digest: <%= BCrypt::Password.create("password123", cost: BCrypt::Engine::MIN_COST) %>
+
+member_without_dob:
+  first_name: Olive
+  last_name: Other
+  email: olive@example.com
+  username: olive_o
+  role: member
+  password_digest: <%= BCrypt::Password.create("password123", cost: BCrypt::Engine::MIN_COST) %>

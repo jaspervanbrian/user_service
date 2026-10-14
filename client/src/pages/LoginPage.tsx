@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api, ApiException } from '../api';
 import { useAuth } from '../context';
 import { KeyRound, User, Users } from 'lucide-react';
@@ -81,6 +81,10 @@ export const LoginPage: React.FC = () => {
             {loading ? 'Authenticating...' : 'Sign in'}
           </button>
         </form>
+
+        <div className="auth-switch-text">
+          Don't have an account? <Link to="/signup">Sign up</Link>
+        </div>
 
         <div className="quick-login-section">
           <span className="quick-login-label">Quick Demo Logins (Seed Accounts)</span>

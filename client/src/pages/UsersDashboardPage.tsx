@@ -6,7 +6,7 @@ import { Navbar } from "../components/Navbar";
 import { EditUserModal } from "../components/EditUserModal";
 import { CreateUserModal } from "../components/CreateUserModal";
 import { Toast, type ToastMessage } from "../components/Toast";
-import { Shield, Lock, Plus, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Lock, Plus, Pencil, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 
 export const UsersDashboardPage: React.FC = () => {
   const { token, user: currentUser, isAdmin, logout } = useAuth();
@@ -22,6 +22,8 @@ export const UsersDashboardPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageJumpInput, setPageJumpInput] = useState("1");
   const [pageSize, setPageSize] = useState(10);
+  const [searchInput, setSearchInput] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -42,6 +44,7 @@ export const UsersDashboardPage: React.FC = () => {
       cursor?: string | null;
       page?: number | null;
       limit?: number;
+      query?: string | null;
     }) => {
       if (!token) return;
 
@@ -49,10 +52,12 @@ export const UsersDashboardPage: React.FC = () => {
       setError(null);
 
       try {
+        const queryToUse = opts.query !== undefined ? opts.query : activeQuery;
         const response = await api.getUsers(token, {
           cursor: opts.cursor,
           page: opts.page,
           limit: opts.limit || pageSize,
+          query: queryToUse,
         });
 
         setUsers(response.users);
@@ -83,13 +88,22 @@ export const UsersDashboardPage: React.FC = () => {
         setLoading(false);
       }
     },
-    [token, pageSize, currentPage, logout],
+    [token, pageSize, currentPage, activeQuery, logout],
   );
 
-  // Initial load or page size change
+  // Debounce search input
   useEffect(() => {
-    loadUsers({ cursor: null, page: 1, limit: pageSize });
-  }, [pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+    const timer = setTimeout(() => {
+      setActiveQuery(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // When activeQuery or pageSize changes, reset page & cursor history and fetch
+  useEffect(() => {
+    setCursorHistory({ 1: null });
+    loadUsers({ cursor: null, page: 1, limit: pageSize, query: activeQuery });
+  }, [activeQuery, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNextPage = () => {
     if (!pagination.has_next_page || !pagination.next_cursor) return;
@@ -149,13 +163,16 @@ export const UsersDashboardPage: React.FC = () => {
       type: "success",
       message: `User @${newUser.username} created successfully!`,
     });
-    // Reload first page to show newly created record
-    loadUsers({ page: 1, limit: pageSize });
+    // Reset search and reload first page
+    setSearchInput("");
+    setActiveQuery("");
+    setCursorHistory({ 1: null });
+    loadUsers({ page: 1, limit: pageSize, query: "" });
   };
 
   return (
     <div className="dashboard-layout">
-      <Navbar />
+      <Navbar onOpenProfile={() => currentUser && setEditingUser(currentUser)} />
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
@@ -195,6 +212,30 @@ export const UsersDashboardPage: React.FC = () => {
 
         {error && <div className="alert alert-error">{error}</div>}
 
+        {/* Search Toolbar */}
+        <div className="table-toolbar">
+          <div className="search-bar">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by username..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+            {searchInput && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => setSearchInput("")}
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Users Table */}
         <div className="card table-card">
           <div className="table-responsive">
@@ -220,7 +261,7 @@ export const UsersDashboardPage: React.FC = () => {
                 ) : users.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="table-empty">
-                      No users found.
+                      {activeQuery ? `No users matching "@${activeQuery}" found.` : "No users found."}
                     </td>
                   </tr>
                 ) : (

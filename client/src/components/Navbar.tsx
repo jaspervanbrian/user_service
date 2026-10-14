@@ -1,7 +1,11 @@
 import { useAuth } from '../context';
 import { LogOut, Users } from 'lucide-react';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onOpenProfile?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onOpenProfile }) => {
   const { user, isAdmin, logout } = useAuth();
 
   return (
@@ -16,7 +20,19 @@ export const Navbar: React.FC = () => {
 
         {user && (
           <div className="navbar-user">
-            <div className="user-profile">
+            <div
+              className={`user-profile ${onOpenProfile ? 'user-profile-clickable' : ''}`}
+              onClick={onOpenProfile}
+              role={onOpenProfile ? 'button' : undefined}
+              tabIndex={onOpenProfile ? 0 : undefined}
+              onKeyDown={(e) => {
+                if (onOpenProfile && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  onOpenProfile();
+                }
+              }}
+              title={onOpenProfile ? 'Click to edit your profile' : undefined}
+            >
               <div className="user-avatar">
                 {user.first_name[0]}
                 {user.last_name[0]}

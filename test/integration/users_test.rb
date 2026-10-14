@@ -69,6 +69,19 @@ class UsersTest < ActionDispatch::IntegrationTest
     assert body["pagination"]["next_cursor"].present?
   end
 
+  test "index filters users by username query case-insensitively" do
+    get "/api/v1/users", params: { query: "ada" }, headers: auth(@admin)
+    assert_response :success
+    body = response.parsed_body
+    assert_equal 1, body["users"].size
+    assert_equal "AdaAdmin", body["users"].first["username"]
+
+    get "/api/v1/users", params: { query: "nonexistent_username_xyz" }, headers: auth(@admin)
+    assert_response :success
+    body = response.parsed_body
+    assert_empty body["users"]
+  end
+
   # --- show ---
 
   test "show requires authentication" do

@@ -7,6 +7,7 @@ module Api
           cursor: params[:cursor],
           page: params[:page],
           limit: params[:limit],
+          query: params[:query],
           scope: policy_scope(User)
         )
 

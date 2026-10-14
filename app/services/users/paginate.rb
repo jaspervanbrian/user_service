@@ -17,15 +17,16 @@ module Users
     MAX_LIMIT     = 100
     CACHE_TTL     = 5.minutes
 
-    def self.call(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all)
-      new(cursor: cursor, page: page, limit: limit, scope: scope).call
+    def self.call(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all, query: nil)
+      new(cursor: cursor, page: page, limit: limit, scope: scope, query: query).call
     end
 
-    def initialize(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all)
+    def initialize(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all, query: nil)
       @cursor    = cursor
       @page_num  = normalize_page(page)
       @limit     = normalize_limit(limit)
-      @scope     = scope
+      @query     = query.to_s.strip.downcase.presence
+      @scope     = apply_search(scope, @query)
       @cursor_id = decode_cursor_id(cursor)
     end
 
@@ -76,13 +77,20 @@ module Users
     end
 
     def cache_key
+      q_part = @query.present? ? ":q=#{Digest::MD5.hexdigest(@query)}" : ""
       if cursor_id.present?
-        "users:cursor_ids:cursor=#{cursor_id}:limit=#{limit}"
+        "users:cursor_ids:cursor=#{cursor_id}:limit=#{limit}#{q_part}"
       elsif @page_num > 1
-        "users:cursor_ids:page=#{@page_num}:limit=#{limit}"
+        "users:cursor_ids:page=#{@page_num}:limit=#{limit}#{q_part}"
       else
-        "users:cursor_ids:cursor=initial:limit=#{limit}"
+        "users:cursor_ids:cursor=initial:limit=#{limit}#{q_part}"
       end
+    end
+
+    def apply_search(scope, query)
+      return scope if query.blank?
+
+      scope.where("lower(username) LIKE ?", "%#{query}%")
     end
 
     def normalize_page(page)

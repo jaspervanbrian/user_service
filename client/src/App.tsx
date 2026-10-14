@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { PublicRoute } from './components/PublicRoute';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 import { UsersDashboardPage } from './pages/UsersDashboardPage';
 
 export const App: React.FC = () => {
@@ -11,9 +12,11 @@ export const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Login Route - Redirects to / if already logged in */}
+          {/* Public Auth Routes - Redirects to / if already logged in */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<RegisterPage />} />
+            <Route path="/register" element={<RegisterPage />} />
           </Route>
 
           {/* Protected Routes - Redirects to /login if unauthenticated */}

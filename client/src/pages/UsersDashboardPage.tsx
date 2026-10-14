@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import type { User, PaginationMeta } from '../types';
-import { api, ApiException } from '../api';
-import { useAuth } from '../context';
-import { Navbar } from '../components/Navbar';
-import { EditUserModal } from '../components/EditUserModal';
-import { CreateUserModal } from '../components/CreateUserModal';
-import { Toast, type ToastMessage } from '../components/Toast';
+import React, { useState, useEffect, useCallback } from "react";
+import type { User, PaginationMeta } from "../types";
+import { api, ApiException } from "../api";
+import { useAuth } from "../context";
+import { Navbar } from "../components/Navbar";
+import { EditUserModal } from "../components/EditUserModal";
+import { CreateUserModal } from "../components/CreateUserModal";
+import { Toast, type ToastMessage } from "../components/Toast";
 
 export const UsersDashboardPage: React.FC = () => {
   const { token, user: currentUser, isAdmin, logout } = useAuth();
@@ -19,14 +19,16 @@ export const UsersDashboardPage: React.FC = () => {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageJumpInput, setPageJumpInput] = useState('1');
+  const [pageJumpInput, setPageJumpInput] = useState("1");
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   // History map of page number -> starting cursor
-  const [cursorHistory, setCursorHistory] = useState<Record<number, string | null>>({
+  const [cursorHistory, setCursorHistory] = useState<
+    Record<number, string | null>
+  >({
     1: null,
   });
 
@@ -35,7 +37,11 @@ export const UsersDashboardPage: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const loadUsers = useCallback(
-    async (opts: { cursor?: string | null; page?: number | null; limit?: number }) => {
+    async (opts: {
+      cursor?: string | null;
+      page?: number | null;
+      limit?: number;
+    }) => {
       if (!token) return;
 
       setLoading(true);
@@ -70,13 +76,13 @@ export const UsersDashboardPage: React.FC = () => {
           }
           setError(err.message);
         } else {
-          setError('Failed to fetch users. Please check server connection.');
+          setError("Failed to fetch users. Please check server connection.");
         }
       } finally {
         setLoading(false);
       }
     },
-    [token, pageSize, currentPage, logout]
+    [token, pageSize, currentPage, logout],
   );
 
   // Initial load or page size change
@@ -87,7 +93,11 @@ export const UsersDashboardPage: React.FC = () => {
   const handleNextPage = () => {
     if (!pagination.has_next_page || !pagination.next_cursor) return;
     const nextPage = currentPage + 1;
-    loadUsers({ cursor: pagination.next_cursor, page: nextPage, limit: pageSize });
+    loadUsers({
+      cursor: pagination.next_cursor,
+      page: nextPage,
+      limit: pageSize,
+    });
   };
 
   const handlePrevPage = () => {
@@ -122,14 +132,22 @@ export const UsersDashboardPage: React.FC = () => {
   };
 
   const handleUserUpdated = (updatedUser: User) => {
-    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    setUsers((prev) =>
+      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)),
+    );
     setEditingUser(null);
-    setToast({ type: 'success', message: `User @${updatedUser.username} updated successfully!` });
+    setToast({
+      type: "success",
+      message: `User @${updatedUser.username} updated successfully!`,
+    });
   };
 
   const handleUserCreated = (newUser: User) => {
     setIsCreateModalOpen(false);
-    setToast({ type: 'success', message: `User @${newUser.username} created successfully!` });
+    setToast({
+      type: "success",
+      message: `User @${newUser.username} created successfully!`,
+    });
     // Reload first page to show newly created record
     loadUsers({ page: 1, limit: pageSize });
   };
@@ -155,14 +173,18 @@ export const UsersDashboardPage: React.FC = () => {
         </div>
 
         {/* Role & Visibility Banner */}
-        <div className={`policy-banner ${isAdmin ? 'banner-admin' : 'banner-member'}`}>
-          <div className="policy-banner-icon">{isAdmin ? '🛡️' : '🔒'}</div>
+        <div
+          className={`policy-banner ${isAdmin ? "banner-admin" : "banner-member"}`}
+        >
+          <div className="policy-banner-icon">{isAdmin ? "🛡️" : "🔒"}</div>
           <div>
-            <strong>{isAdmin ? 'Administrator Access' : 'Standard Member Access'}</strong>
+            <strong>
+              {isAdmin ? "Administrator Access" : "Standard Member Access"}
+            </strong>
             <p>
               {isAdmin
-                ? 'You have elevated privileges. You can view all user emails, dates of birth, create new accounts, and promote/demote user roles.'
-                : 'Role-Based Access Control (RBAC): Email and Date of Birth fields are strictly private and masked for other users. You can edit your own profile details.'}
+                ? "You have elevated privileges. You can view all user emails, dates of birth, create new accounts, and promote/demote user roles."
+                : "Email and Date of Birth fields are strictly private and masked for other users. You can edit your own profile details."}
             </p>
           </div>
         </div>
@@ -175,13 +197,13 @@ export const UsersDashboardPage: React.FC = () => {
             <table className="users-table">
               <thead>
                 <tr>
-                  <th style={{ width: '60px' }}>ID</th>
+                  <th style={{ width: "60px" }}>ID</th>
                   <th>Username</th>
                   <th>Full Name</th>
                   <th>Role</th>
                   <th>Email</th>
                   <th>Date of Birth</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -203,11 +225,13 @@ export const UsersDashboardPage: React.FC = () => {
                     const canEdit = isAdmin || isSelf;
 
                     return (
-                      <tr key={u.id} className={isSelf ? 'row-self' : ''}>
+                      <tr key={u.id} className={isSelf ? "row-self" : ""}>
                         <td className="text-muted">#{u.id}</td>
                         <td>
                           <strong>@{u.username}</strong>
-                          {isSelf && <span className="badge badge-self">You</span>}
+                          {isSelf && (
+                            <span className="badge badge-self">You</span>
+                          )}
                         </td>
                         <td>
                           {u.first_name} {u.last_name}
@@ -215,7 +239,7 @@ export const UsersDashboardPage: React.FC = () => {
                         <td>
                           <span
                             className={`role-badge ${
-                              u.role === 'admin' ? 'role-admin' : 'role-member'
+                              u.role === "admin" ? "role-admin" : "role-member"
                             }`}
                           >
                             {u.role}
@@ -225,23 +249,31 @@ export const UsersDashboardPage: React.FC = () => {
                           {u.email ? (
                             <span className="field-value">{u.email}</span>
                           ) : (
-                            <span className="field-restricted" title="Only visible to Admins or Self">
+                            <span
+                              className="field-restricted"
+                              title="Only visible to Admins or Self"
+                            >
                               🔒 Restricted
                             </span>
                           )}
                         </td>
                         <td>
                           {u.date_of_birth ? (
-                            <span className="field-value">{u.date_of_birth}</span>
+                            <span className="field-value">
+                              {u.date_of_birth}
+                            </span>
                           ) : u.date_of_birth === null ? (
                             <span className="text-muted">Not provided</span>
                           ) : (
-                            <span className="field-restricted" title="Only visible to Admins or Self">
+                            <span
+                              className="field-restricted"
+                              title="Only visible to Admins or Self"
+                            >
                               🔒 Restricted
                             </span>
                           )}
                         </td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td style={{ textAlign: "right" }}>
                           {canEdit ? (
                             <button
                               onClick={() => setEditingUser(u)}
@@ -250,7 +282,10 @@ export const UsersDashboardPage: React.FC = () => {
                               Edit
                             </button>
                           ) : (
-                            <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: "0.8rem" }}
+                            >
                               Read-only
                             </span>
                           )}
@@ -267,8 +302,8 @@ export const UsersDashboardPage: React.FC = () => {
           <div className="pagination-footer">
             <div className="pagination-info">
               <span>
-                Showing <strong>{users.length}</strong> records per page &bull; Page{' '}
-                <strong>{currentPage}</strong>
+                Showing <strong>{users.length}</strong> records per page &bull;
+                Page <strong>{currentPage}</strong>
               </span>
 
               <div className="page-size-selector">
@@ -305,7 +340,11 @@ export const UsersDashboardPage: React.FC = () => {
                   className="page-jump-input"
                   title="Enter page number and press Jump or Enter"
                 />
-                <button type="submit" disabled={loading} className="btn btn-outline btn-sm">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn btn-outline btn-sm"
+                >
                   Jump
                 </button>
               </form>

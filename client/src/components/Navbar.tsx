@@ -1,5 +1,5 @@
 import { useAuth } from '../context';
-import { LogOut } from 'lucide-react';
+import { LogOut, Users } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, isAdmin, logout } = useAuth();
@@ -8,7 +8,9 @@ export const Navbar: React.FC = () => {
     <header className="navbar">
       <div className="navbar-container">
         <div className="navbar-brand">
-          <div className="brand-logo">US</div>
+          <div className="brand-logo">
+            <Users size={20} />
+          </div>
           <h1 className="brand-title">User Service</h1>
         </div>
 

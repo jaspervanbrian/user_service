@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiException } from '../api';
 import { useAuth } from '../context';
-import { KeyRound, User } from 'lucide-react';
+import { KeyRound, User, Users } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -43,7 +43,9 @@ export const LoginPage: React.FC = () => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">US</div>
+          <div className="login-logo">
+            <Users size={26} />
+          </div>
           <h2>Sign in to User Service</h2>
         </div>
 

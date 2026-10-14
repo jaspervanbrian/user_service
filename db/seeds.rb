@@ -167,10 +167,6 @@ puts "Done! Seeded #{User.count} users (#{User.admin.count} admins, #{User.membe
 # High-Performance Bulk Dataset Generator (using Faker)
 # ==============================================================================
 # Generates 50k - 100k records using Faker, single-digest BCrypt, and chunked insert_all.
-# To generate a large dataset, uncomment the call below:
-#
-# bulk_seed_users(50_000)
-#
 # def bulk_seed_users(total_count = 50_000, batch_size = 3_000)
 #   puts "\nStarting bulk seed of #{total_count} users (batches of #{batch_size})..."
 #   start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -210,3 +206,6 @@ puts "Done! Seeded #{User.count} users (#{User.admin.count} admins, #{User.membe
 #   elapsed = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(2)
 #   puts "Done! Seeded #{total_count} users in #{elapsed}s. Total users in DB: #{User.count}."
 # end
+#
+# # To generate a large dataset for load testing, uncomment the call below:
+# bulk_seed_users(50_000)

@@ -1,4 +1,5 @@
 import { useAuth } from '../context';
+import { LogOut } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, isAdmin, logout } = useAuth();
@@ -32,6 +33,7 @@ export const Navbar: React.FC = () => {
             </div>
 
             <button onClick={logout} className="btn btn-secondary btn-sm" title="Log out">
+              <LogOut size={14} style={{ marginRight: '6px' }} />
               Log out
             </button>
           </div>

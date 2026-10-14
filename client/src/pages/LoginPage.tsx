@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiException } from '../api';
 import { useAuth } from '../context';
+import { KeyRound, User } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -87,14 +88,16 @@ export const LoginPage: React.FC = () => {
               className="btn btn-outline btn-sm"
               onClick={() => quickFill('ada.admin@example.com', 'password123')}
             >
-              🔑 Login as Admin (Ada Lovelace)
+              <KeyRound size={14} style={{ marginRight: '6px' }} />
+              Login as Admin (Ada Lovelace)
             </button>
             <button
               type="button"
               className="btn btn-outline btn-sm"
               onClick={() => quickFill('grace.hopper@example.com', 'password123')}
             >
-              👤 Login as Member (Grace Hopper)
+              <User size={14} style={{ marginRight: '6px' }} />
+              Login as Member (Grace Hopper)
             </button>
           </div>
         </div>

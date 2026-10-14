@@ -6,6 +6,7 @@ import { Navbar } from "../components/Navbar";
 import { EditUserModal } from "../components/EditUserModal";
 import { CreateUserModal } from "../components/CreateUserModal";
 import { Toast, type ToastMessage } from "../components/Toast";
+import { Shield, Lock, Plus, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const UsersDashboardPage: React.FC = () => {
   const { token, user: currentUser, isAdmin, logout } = useAuth();
@@ -167,7 +168,8 @@ export const UsersDashboardPage: React.FC = () => {
               onClick={() => setIsCreateModalOpen(true)}
               className="btn btn-primary"
             >
-              + Create New User
+              <Plus size={16} style={{ marginRight: "6px" }} />
+              Create New User
             </button>
           )}
         </div>
@@ -176,7 +178,9 @@ export const UsersDashboardPage: React.FC = () => {
         <div
           className={`policy-banner ${isAdmin ? "banner-admin" : "banner-member"}`}
         >
-          <div className="policy-banner-icon">{isAdmin ? "🛡️" : "🔒"}</div>
+          <div className="policy-banner-icon">
+            {isAdmin ? <Shield size={24} /> : <Lock size={24} />}
+          </div>
           <div>
             <strong>
               {isAdmin ? "Administrator Access" : "Standard Member Access"}
@@ -249,11 +253,9 @@ export const UsersDashboardPage: React.FC = () => {
                           {u.email ? (
                             <span className="field-value">{u.email}</span>
                           ) : (
-                            <span
-                              className="field-restricted"
-                              title="Only visible to Admins or Self"
-                            >
-                              🔒 Restricted
+                            <span className="field-restricted">
+                              <Lock size={11} style={{ display: "inline", marginRight: "4px", verticalAlign: "-1px" }} />
+                              Restricted
                             </span>
                           )}
                         </td>
@@ -265,11 +267,9 @@ export const UsersDashboardPage: React.FC = () => {
                           ) : u.date_of_birth === null ? (
                             <span className="text-muted">Not provided</span>
                           ) : (
-                            <span
-                              className="field-restricted"
-                              title="Only visible to Admins or Self"
-                            >
-                              🔒 Restricted
+                            <span className="field-restricted">
+                              <Lock size={11} style={{ display: "inline", marginRight: "4px", verticalAlign: "-1px" }} />
+                              Restricted
                             </span>
                           )}
                         </td>
@@ -279,6 +279,7 @@ export const UsersDashboardPage: React.FC = () => {
                               onClick={() => setEditingUser(u)}
                               className="btn btn-secondary btn-sm"
                             >
+                              <Pencil size={12} style={{ marginRight: "4px" }} />
                               Edit
                             </button>
                           ) : (
@@ -327,7 +328,7 @@ export const UsersDashboardPage: React.FC = () => {
                 disabled={currentPage <= 1 || loading}
                 className="btn btn-secondary btn-sm"
               >
-                &larr; Prev
+                <ChevronLeft size={14} style={{ marginRight: "2px" }} /> Prev
               </button>
 
               <form onSubmit={handlePageJump} className="page-jump-form">
@@ -355,7 +356,7 @@ export const UsersDashboardPage: React.FC = () => {
                 disabled={!pagination.has_next_page || loading}
                 className="btn btn-secondary btn-sm"
               >
-                Next &rarr;
+                Next <ChevronRight size={14} style={{ marginLeft: "2px" }} />
               </button>
             </div>
           </div>

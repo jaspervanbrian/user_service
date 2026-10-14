@@ -4,6 +4,8 @@ module Api
     include Pundit::Authorization
 
     before_action :authenticate!
+    after_action :verify_authorized, unless: -> { action_name == "index" }
+    after_action :verify_policy_scoped, if: -> { action_name == "index" }
 
     rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found

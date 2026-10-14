@@ -2,6 +2,9 @@ require "test_helper"
 
 class AuthenticationTest < ActionDispatch::IntegrationTest
   class TestProtectedController < Api::BaseController
+    skip_after_action :verify_authorized
+    skip_after_action :verify_policy_scoped
+
     def index
       render json: { user_id: current_user.id, role: current_claims.role }
     end
@@ -56,6 +59,7 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
       namespace :api do
         namespace :v1 do
           resource :sessions, only: :create
+          resources :users, only: %i[index show create update]
         end
       end
     end

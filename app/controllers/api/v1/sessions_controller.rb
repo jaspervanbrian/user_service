@@ -2,6 +2,7 @@ module Api
   module V1
     class SessionsController < Api::BaseController
       skip_before_action :authenticate!, only: :create
+      skip_after_action :verify_authorized, only: :create
 
       def create
         login = session_params[:login]

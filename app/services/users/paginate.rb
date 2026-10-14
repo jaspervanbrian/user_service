@@ -22,50 +22,56 @@ module Users
     end
 
     def initialize(cursor: nil, limit: DEFAULT_LIMIT, scope: User.all)
-      @cursor = cursor
-      @limit  = normalize_limit(limit)
-      @scope  = scope
+      @cursor    = cursor
+      @limit     = normalize_limit(limit)
+      @scope     = scope
+      @cursor_id = decode_cursor_id(cursor)
     end
 
     def call
-      cursor_id = decode_cursor_id(@cursor)
-
-      # 1. Fetch limit + 1 IDs from Redis/Rails.cache
-      cache_key = "users:cursor_ids:cursor=#{cursor_id || 'initial'}:limit=#{@limit}"
-      ids = Rails.cache.fetch(cache_key, expires_in: CACHE_TTL) do
-        query = @scope.order(id: :asc)
-        query = query.where("id > ?", cursor_id) if cursor_id.present?
-        query.limit(@limit + 1).pluck(:id)
-      end
-
-      # 2. Check if there is a next page
-      has_next_page = ids.size > @limit
-      page_ids = has_next_page ? ids.first(@limit) : ids
-
-      # 3. Hydrate User models preserving order
-      users = if page_ids.any?
-        user_map = @scope.where(id: page_ids).index_by(&:id)
-        page_ids.map { |id| user_map[id] }.compact
-      else
-        []
-      end
-
-      # 4. Generate opaque cursor from the last item
-      next_cursor = if has_next_page && users.last.present?
-        encode_cursor(id: users.last.id)
-      end
+      ids = fetch_candidate_ids
+      has_next_page = ids.size > limit
+      page_ids = has_next_page ? ids.first(limit) : ids
+      users = hydrate_users(page_ids)
 
       {
         users: users,
         pagination: {
-          next_cursor: next_cursor,
+          next_cursor: next_cursor_for(users, has_next_page: has_next_page),
           has_next_page: has_next_page,
-          limit: @limit
+          limit: limit
         }
       }
     end
 
     private
+
+    attr_reader :cursor_id, :limit, :scope
+
+    def fetch_candidate_ids
+      Rails.cache.fetch(cache_key, expires_in: CACHE_TTL) do
+        query = scope.order(id: :asc)
+        query = query.where("id > ?", cursor_id) if cursor_id.present?
+        query.limit(limit + 1).pluck(:id)
+      end
+    end
+
+    def hydrate_users(page_ids)
+      return [] if page_ids.empty?
+
+      user_map = scope.where(id: page_ids).index_by(&:id)
+      page_ids.map { |id| user_map[id] }.compact
+    end
+
+    def next_cursor_for(users, has_next_page:)
+      return nil unless has_next_page && users.last.present?
+
+      encode_cursor(id: users.last.id)
+    end
+
+    def cache_key
+      "users:cursor_ids:cursor=#{cursor_id || 'initial'}:limit=#{limit}"
+    end
 
     def normalize_limit(limit)
       val = limit.to_i

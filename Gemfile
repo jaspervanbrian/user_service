@@ -52,4 +52,4 @@ gem "pundit", "~> 2.5"
 
 gem "redis", "~> 6.0"
 
-gem "faker", "~> 3.8", groups: [:development, :test]
+gem "faker", "~> 3.8", groups: [ :development, :test ]

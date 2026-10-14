@@ -6,11 +6,28 @@ module Api
     before_action :authenticate!
 
     rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
+    rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
+    rescue_from ActionController::ParameterMissing, with: :render_bad_request
+    rescue_from ActiveRecord::RecordNotUnique, with: :render_conflict
 
     private
 
     def render_forbidden(exception = nil)
       render json: { error: exception&.message || "Forbidden" }, status: :forbidden
+    end
+
+    def render_not_found(_exception = nil)
+      render json: { error: "Not found" }, status: :not_found
+    end
+
+    def render_bad_request(exception)
+      render json: { error: exception.message }, status: :bad_request
+    end
+
+    # Raised when a DB unique index is hit in a race the model validation could not catch.
+    def render_conflict(_exception = nil)
+      render json: { errors: { base: [ "username or email has already been taken" ] } },
+             status: :unprocessable_content
     end
   end
 end

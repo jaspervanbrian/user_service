@@ -49,3 +49,7 @@ end
 gem "jwt", "~> 3.3"
 
 gem "pundit", "~> 2.5"
+
+gem "redis", "~> 6.0"
+
+gem "faker", "~> 3.8", groups: [:development, :test]

@@ -42,3 +42,23 @@ production:
     <<: *default
     # database: path/to/persistent/storage/production_cable.sqlite3
     migrations_paths: db/cable_migrate
+
+# ==============================================================================
+# PostgreSQL Primary + Read Replica Multi-DB Configuration (Example)
+# ==============================================================================
+# When switching to PostgreSQL:
+# 1. Add `gem "pg"` to Gemfile
+# 2. Configure primary (writer) and replica (reader) with replica: true
+#
+# production:
+#   primary:
+#     adapter: postgresql
+#     encoding: unicode
+#     url: <%= ENV['DATABASE_URL'] %> # e.g. postgres://pg-primary:5432/user_service
+#     pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+#   primary_replica:
+#     adapter: postgresql
+#     encoding: unicode
+#     url: <%= ENV['DATABASE_REPLICA_URL'] %> # e.g. postgres://pg-replica:5432/user_service
+#     replica: true
+#     pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>

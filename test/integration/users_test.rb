@@ -59,6 +59,47 @@ class UsersTest < ActionDispatch::IntegrationTest
     assert_empty body["users"].map { |u| u["id"] } & body2["users"].map { |u| u["id"] }
   end
 
+  # --- show ---
+
+  test "show requires authentication" do
+    get "/api/v1/users/#{@member.id}"
+    assert_response :unauthorized
+  end
+
+  test "admin sees private fields for any user in show" do
+    get "/api/v1/users/#{@member.id}", headers: auth(@admin)
+    assert_response :success
+    user = response.parsed_body["user"]
+    assert_equal "mike@example.com", user["email"]
+    assert_equal "1995-06-30", user["date_of_birth"]
+    assert_nil user["password_digest"]
+  end
+
+  test "member sees own private fields in show" do
+    get "/api/v1/users/#{@member.id}", headers: auth(@member)
+    assert_response :success
+    user = response.parsed_body["user"]
+    assert_equal "mike@example.com", user["email"]
+    assert_equal "1995-06-30", user["date_of_birth"]
+  end
+
+  test "member cannot see another user's private fields in show" do
+    get "/api/v1/users/#{@admin.id}", headers: auth(@member)
+    assert_response :success
+    user = response.parsed_body["user"]
+    assert_equal "AdaAdmin", user["username"]
+    assert_nil user["email"]
+    assert_nil user["date_of_birth"]
+    assert_not user.key?("email")
+    assert_not user.key?("date_of_birth")
+  end
+
+  test "show non-existent user returns 404" do
+    get "/api/v1/users/0", headers: auth(@member)
+    assert_response :not_found
+    assert_equal "Not found", response.parsed_body["error"]
+  end
+
   # --- create ---
 
   test "admin creates a user" do
@@ -81,6 +122,7 @@ class UsersTest < ActionDispatch::IntegrationTest
       post "/api/v1/users", params: new_user_params, as: :json, headers: auth(@member)
     end
     assert_response :forbidden
+    assert_equal "You are not authorized to perform this action", response.parsed_body["error"]
   end
 
   test "create returns 422 on validation failure" do
@@ -112,6 +154,7 @@ class UsersTest < ActionDispatch::IntegrationTest
   test "member cannot update another user" do
     patch "/api/v1/users/#{@other.id}", params: { user: { first_name: "Hax" } }, as: :json, headers: auth(@member)
     assert_response :forbidden
+    assert_equal "You are not authorized to perform this action", response.parsed_body["error"]
     assert_not_equal "Hax", @other.reload.first_name
   end
 

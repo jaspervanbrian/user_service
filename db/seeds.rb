@@ -167,45 +167,46 @@ puts "Done! Seeded #{User.count} users (#{User.admin.count} admins, #{User.membe
 # High-Performance Bulk Dataset Generator (using Faker)
 # ==============================================================================
 # Generates 50k - 100k records using Faker, single-digest BCrypt, and chunked insert_all.
-# def bulk_seed_users(total_count = 50_000, batch_size = 3_000)
-#   puts "\nStarting bulk seed of #{total_count} users (batches of #{batch_size})..."
-#   start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-#
-#   # Pre-compute BCrypt hash once to avoid CPU churn on bulk inserts
-#   password_digest = BCrypt::Password.create("password123", cost: BCrypt::Engine::MIN_COST)
-#   now = Time.current
-#   starting_id = (User.maximum(:id) || 0) + 1
-#
-#   # Pre-sample pools of names for fast generation
-#   first_names = 200.times.map { Faker::Name.first_name }
-#   last_names  = 200.times.map { Faker::Name.last_name }
-#
-#   (0...total_count).each_slice(batch_size) do |batch_indices|
-#     rows = batch_indices.map do |offset|
-#       index = starting_id + offset
-#       fn = first_names[offset % 200]
-#       ln = last_names[(offset * 7) % 200]
-#       clean_fn = fn.downcase.gsub(/[^a-z0-9_]/, "")
-#       clean_ln = ln.downcase.gsub(/[^a-z0-9_]/, "")
-#       {
-#         username: "#{clean_fn}_#{index}",
-#         first_name: fn,
-#         last_name: ln,
-#         email: "#{clean_fn}.#{clean_ln}.#{index}@example.com",
-#         role: 0, # member
-#         password_digest: password_digest,
-#         date_of_birth: (offset % 5 == 0) ? nil : (18 + (index % 50)).years.ago.to_date,
-#         created_at: now,
-#         updated_at: now
-#       }
-#     end
-#
-#     User.insert_all(rows)
-#   end
-#
-#   elapsed = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(2)
-#   puts "Done! Seeded #{total_count} users in #{elapsed}s. Total users in DB: #{User.count}."
-# end
-#
-# # To generate a large dataset for load testing, uncomment the call below:
-# bulk_seed_users(50_000)
+def bulk_seed_users(total_count = 50_000, batch_size = 3_000)
+  puts "\nStarting bulk seed of #{total_count} users (batches of #{batch_size})..."
+  start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+  # Pre-compute BCrypt hash once to avoid CPU churn on bulk inserts
+  password_digest = BCrypt::Password.create("password123", cost: BCrypt::Engine::MIN_COST)
+  now = Time.current
+  starting_id = (User.maximum(:id) || 0) + 1
+
+  # Pre-sample pools of names for fast generation
+  first_names = 200.times.map { Faker::Name.first_name }
+  last_names  = 200.times.map { Faker::Name.last_name }
+
+  (0...total_count).each_slice(batch_size) do |batch_indices|
+    rows = batch_indices.map do |offset|
+      index = starting_id + offset
+      fn = first_names[offset % 200]
+      ln = last_names[(offset * 7) % 200]
+      clean_fn = fn.downcase.gsub(/[^a-z0-9_]/, "")
+      clean_ln = ln.downcase.gsub(/[^a-z0-9_]/, "")
+      {
+        username: "#{clean_fn}_#{index}",
+        first_name: fn,
+        last_name: ln,
+        email: "#{clean_fn}.#{clean_ln}.#{index}@example.com",
+        role: 0, # member
+        password_digest: password_digest,
+        date_of_birth: (offset % 5 == 0) ? nil : (18 + (index % 50)).years.ago.to_date,
+        created_at: now,
+        updated_at: now
+      }
+    end
+
+    User.insert_all(rows)
+  end
+
+  elapsed = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(2)
+  puts "Done! Seeded #{total_count} users in #{elapsed}s. Total users in DB: #{User.count}."
+end
+
+# To generate a large dataset for load testing, run:
+#   BULK_SEED=true rails db:seed
+bulk_seed_users(ENV.fetch("BULK_USERS_COUNT", 50_000).to_i) if ENV["BULK_SEED"] == "true"

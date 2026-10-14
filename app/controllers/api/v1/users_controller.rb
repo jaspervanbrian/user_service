@@ -15,6 +15,13 @@ module Api
         }
       end
 
+      def show
+        user = User.find(params[:id])
+        authorize user
+
+        render json: { user: UserSerializer.render(user, viewer: current_user) }
+      end
+
       def create
         authorize User
         user = User.new(permitted_attributes(User))
@@ -35,12 +42,6 @@ module Api
         else
           render_validation_errors(user)
         end
-      end
-
-      private
-
-      def render_validation_errors(user)
-        render json: { errors: user.errors.to_hash }, status: :unprocessable_content
       end
     end
   end

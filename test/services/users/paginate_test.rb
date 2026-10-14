@@ -70,4 +70,15 @@ class UsersPaginateTest < ActiveSupport::TestCase
     assert_kind_of Array, cached_ids
     assert_equal 3, cached_ids.size # limit + 1
   end
+
+  test "navigates directly via page number" do
+    all_users = User.order(id: :asc).to_a
+    page2 = Users::Paginate.call(page: 2, limit: 1)
+
+    assert_equal 1, page2[:users].size
+    assert_equal all_users[1].id, page2[:users].first.id
+    assert_equal 2, page2[:pagination][:page]
+    assert page2[:pagination][:has_next_page]
+    assert page2[:pagination][:next_cursor].present?
+  end
 end

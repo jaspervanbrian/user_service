@@ -17,12 +17,13 @@ module Users
     MAX_LIMIT     = 100
     CACHE_TTL     = 5.minutes
 
-    def self.call(cursor: nil, limit: DEFAULT_LIMIT, scope: User.all)
-      new(cursor: cursor, limit: limit, scope: scope).call
+    def self.call(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all)
+      new(cursor: cursor, page: page, limit: limit, scope: scope).call
     end
 
-    def initialize(cursor: nil, limit: DEFAULT_LIMIT, scope: User.all)
+    def initialize(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all)
       @cursor    = cursor
+      @page_num  = normalize_page(page)
       @limit     = normalize_limit(limit)
       @scope     = scope
       @cursor_id = decode_cursor_id(cursor)
@@ -39,7 +40,8 @@ module Users
         pagination: {
           next_cursor: next_cursor_for(users, has_next_page: has_next_page),
           has_next_page: has_next_page,
-          limit: limit
+          limit: limit,
+          page: @page_num
         }
       }
     end
@@ -51,7 +53,11 @@ module Users
     def fetch_candidate_ids
       Rails.cache.fetch(cache_key, expires_in: CACHE_TTL) do
         query = scope.order(id: :asc)
-        query = query.where("id > ?", cursor_id) if cursor_id.present?
+        if cursor_id.present?
+          query = query.where("id > ?", cursor_id)
+        elsif @page_num > 1
+          query = query.offset((@page_num - 1) * limit)
+        end
         query.limit(limit + 1).pluck(:id)
       end
     end
@@ -70,7 +76,18 @@ module Users
     end
 
     def cache_key
-      "users:cursor_ids:cursor=#{cursor_id || 'initial'}:limit=#{limit}"
+      if cursor_id.present?
+        "users:cursor_ids:cursor=#{cursor_id}:limit=#{limit}"
+      elsif @page_num > 1
+        "users:cursor_ids:page=#{@page_num}:limit=#{limit}"
+      else
+        "users:cursor_ids:cursor=initial:limit=#{limit}"
+      end
+    end
+
+    def normalize_page(page)
+      val = page.to_i
+      val.positive? ? val : 1
     end
 
     def normalize_limit(limit)

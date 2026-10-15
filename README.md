@@ -12,46 +12,25 @@ A production-grade **Rails 8 API + React SPA** user management system built with
 
 ---
 
-## Architecture Overview
-
-```mermaid
-graph TD
-    Client["React 19 SPA (Vite + TypeScript)<br/>:5173"]
-    API["Rails 8 API Server (Puma)<br/>:3000"]
-    PG[("PostgreSQL 17<br/>Primary Store")]
-    Redis[("Redis 8<br/>Keyset ID & Data Cache")]
-    Gateway["API Gateway / External Verifier<br/>(RFC 7638 JWKS)"]
-
-    Client -->|"RS256 Bearer JWT + REST JSON"| API
-    API -->|"CRUD Queries & Expression Index"| PG
-    API -->|"Keyset Candidate IDs & Caching"| Redis
-    Gateway -->|"GET /.well-known/jwks.json"| API
-```
-
----
-
-## Architectural Highlights
-
-### 1. Asymmetric RS256 JWT Authentication
-- **Private Key Signing:** Tokens are signed using an RSA 2048-bit private key.
-- **RFC 7638 Deterministic `kid`:** The Key ID header (`kid`) is computed directly from the SHA-256 JWK thumbprint of the public key (`JWT::JWK.new(key).kid`), ensuring zero-config alignment between issued token headers and JWKS.
-- **Zero-PII Token Payload:** The JWT claims only carry standard claims (`sub`, `iss`, `aud`, `exp`, `nbf`, `iat`, `jti`) and authorization context (`role`). No sensitive PII (`email`, `date_of_birth`) ever lives in the token.
-- **Public JWKS Endpoint:** `GET /.well-known/jwks.json` serves the public key set so downstream microservices and edge API Gateways can independently verify tokens without database hits.
-- **Swappable Verifier Seam (`Auth.verifier`):**
-  - **Local Verifier (`Auth::Verifiers::Local`):** In-process cryptographically verifies token signatures against `Auth.key_set.to_jwks`.
-  - **Gateway Verifier (`Auth::Verifiers::Gateway`):** Configurable via `AUTH_VERIFIER=gateway` to trust upstream identity headers (`X-User-Id`, `X-User-Role`) injected by an API Gateway (AWS HTTP API, Kong, Envoy) that verified the JWT at the perimeter.
-
-### 2. Authorization & Field-Level Visibility (RBAC + ABAC)
-- **Role Hierarchy:** Two roles: `member` and `admin`.
-- **Attribute-Based Masking:** `email` and `date_of_birth` are strictly private PII.
-- **Field Omission vs Null:** When a member views other users, private field keys are completely stripped from the JSON response by `UserSerializer` rather than set to `null`, ensuring clients can clearly differentiate between an unprovided field and an unauthorized field.
-- **Role Escalation Protection:** Only administrators can promote or demote user roles. Public sign-up strictly creates `member` accounts.
-
-### 3. Pure Keyset Cursor Pagination
-- **Zero `OFFSET` Penalty:** Conventional `OFFSET N` scans and discards $N$ records ($O(N)$ penalty). Our service implements pure keyset cursor pagination (`WHERE id > cursor_id`), operating in **strictly $O(1)$ constant time** regardless of depth.
-- **Zero `COUNT(*)` Queries:** The service plucks `limit + 1` primary key IDs. If result count exceeds `limit`, `has_next_page` is true and the last record ID is Base64 URL-safe encoded into an opaque cursor token.
-- **Redis ID Caching:** The array of candidate IDs for each cursor and query is cached in Redis (`users:cursor_ids:cursor=...`) for 5 minutes, eliminating redundant database scans on repeated navigation.
-- **Live Search Query Integration:** Searching by username (`WHERE lower(username) LIKE ? AND id > ?`) preserves pure keyset cursor pagination.
+## Table of Contents
+- [Docker Compose Quickstart (PostgreSQL 17 + Redis 8)](#docker-compose-quickstart-postgresql-17--redis-8)
+- [Local Development (Zero-Docker / SQLite Option)](#local-development-zero-docker--sqlite-option)
+- [Default Sample Accounts (Seeded)](#default-sample-accounts-seeded)
+- [API Reference](#api-reference)
+  - [1. Public RFC 7638 JWKS](#1-public-rfc-7638-jwks)
+  - [2. User Sign Up (Public Registration)](#2-user-sign-up-public-registration)
+  - [3. Login (Create Session)](#3-login-create-session)
+  - [4. List Users (Keyset Cursor & Live Search)](#4-list-users-keyset-cursor--live-search)
+  - [5. Get User Profile](#5-get-user-profile)
+  - [6. Create User (Admin Only)](#6-create-user-admin-only)
+  - [7. Update User (Self or Admin)](#7-update-user-self-or-admin)
+- [High-Performance Bulk Seeding (50k - 100k Records)](#high-performance-bulk-seeding-50k---100k-records)
+- [Environment Variables](#environment-variables)
+- [Testing & Quality Assurance](#testing--quality-assurance)
+- [Extending Beyond & System Architecture](#extending-beyond--system-architecture)
+  - [System Architecture Diagram](#system-architecture-diagram)
+  - [Architectural Highlights & Design Decisions](#architectural-highlights--design-decisions)
+  - [Production Scaling & Future Extensions](#production-scaling--future-extensions)
 
 ---
 
@@ -88,7 +67,7 @@ docker compose down
 
 ---
 
-## Local Development (Zero Docker / SQLite Option)
+## Local Development (Zero-Docker / SQLite Option)
 
 You can also run the application locally without Docker. The app automatically defaults to SQLite and in-memory caching if PostgreSQL and Redis are not running.
 
@@ -349,7 +328,7 @@ BULK_SEED=true BULK_USERS_COUNT=100000 bin/rails db:seed
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | *(None / SQLite fallback)* | Connection URL for PostgreSQL (e.g. `postgres://user:pass@host:5432/dbname`) |
+| `DATABASE_URL` | *(None / SQLite fallback)* | Connection URL for PostgreSQL 17 (e.g. `postgres://user:pass@host:5432/dbname`) |
 | `REDIS_URL` | *(None / Memory store fallback)* | Connection URL for Redis 8 cache store (e.g. `redis://redis:6379/0`) |
 | `JWT_PRIVATE_KEY` | Rails credentials | RSA 2048-bit PEM private key used to sign session tokens |
 | `JWT_ISSUER` | `http://localhost:3000` | Issuer claim (`iss`) embedded in tokens and matched on verify |
@@ -378,3 +357,90 @@ cd client
 bun run lint   # Oxlint (0 warnings, 0 errors)
 bun run build  # TypeScript typecheck & Vite production bundle
 ```
+
+---
+
+## Extending Beyond & System Architecture
+
+### System Architecture Diagram
+
+```mermaid
+graph TD
+    Client["React 19 SPA (Vite + TypeScript)<br/>:5173"]
+    API["Rails 8 API Server (Puma)<br/>:3000"]
+    PG[("PostgreSQL 17<br/>Primary Store")]
+    Redis[("Redis 8<br/>Keyset ID & Data Cache")]
+    Gateway["API Gateway / External Verifier<br/>(RFC 7638 JWKS)"]
+
+    Client -->|"RS256 Bearer JWT + REST JSON"| API
+    API -->|"CRUD Queries & Expression Index"| PG
+    API -->|"Keyset Candidate IDs & Caching"| Redis
+    Gateway -->|"GET /.well-known/jwks.json"| API
+```
+
+---
+
+### Architectural Highlights & Design Decisions
+
+#### 1. Asymmetric RS256 JWT Authentication & Edge Verification
+- **Private Key Signing:** Tokens are signed using an RSA 2048-bit private key.
+- **RFC 7638 Deterministic `kid`:** The Key ID header (`kid`) is computed directly from the SHA-256 JWK thumbprint of the public key (`JWT::JWK.new(key).kid`), ensuring zero-config alignment between issued token headers and JWKS.
+- **Zero-PII Token Payload:** The JWT claims only carry standard claims (`sub`, `iss`, `aud`, `exp`, `nbf`, `iat`, `jti`) and authorization context (`role`). No sensitive PII (`email`, `date_of_birth`) ever lives in the token.
+- **Public JWKS Endpoint:** `GET /.well-known/jwks.json` serves the public key set so downstream microservices and edge API Gateways can independently verify tokens without database hits.
+- **Swappable Verifier Seam (`Auth.verifier`):**
+  - **Local Verifier (`Auth::Verifiers::Local`):** In-process cryptographically verifies token signatures against `Auth.key_set.to_jwks`.
+  - **Gateway Verifier (`Auth::Verifiers::Gateway`):** Configurable via `AUTH_VERIFIER=gateway` to trust upstream identity headers (`X-User-Id`, `X-User-Role`) injected by an API Gateway (AWS HTTP API, Kong, Envoy) that verified the JWT at the perimeter.
+
+#### 2. Attribute-Based & Role-Based Access Control (ABAC + RBAC)
+- **Role Hierarchy:** Two roles: `member` and `admin`.
+- **Attribute-Based Masking:** `email` and `date_of_birth` are classified as sensitive PII.
+- **Field Omission vs Null:** When a member views other users, private field keys are completely stripped from the JSON response by `UserSerializer` rather than set to `null`, ensuring clients can clearly differentiate between an unprovided field and an unauthorized field.
+- **Role Escalation Protection:** Only administrators can promote or demote user roles. Public sign-up strictly creates `member` accounts.
+
+#### 3. Pure Keyset Cursor Pagination & Scalability
+- **Zero `OFFSET` Penalty:** Conventional `OFFSET N` scans and discards $N$ records ($O(N)$ penalty). Our service implements pure keyset cursor pagination (`WHERE id > cursor_id`), operating in **strictly $O(1)$ constant time** regardless of depth.
+- **Zero `COUNT(*)` Queries:** The service plucks `limit + 1` primary key IDs. If result count exceeds `limit`, `has_next_page` is true and the last record ID is Base64 URL-safe encoded into an opaque cursor token.
+- **Redis ID Caching:** The array of candidate IDs for each cursor and query is cached in Redis (`users:cursor_ids:cursor=...`) for 5 minutes, eliminating redundant database scans on repeated navigation.
+- **Live Search Query Integration:** Searching by username (`WHERE lower(username) LIKE ? AND id > ?`) preserves pure keyset cursor pagination.
+
+#### 4. Database Expression Indexing & Timing Attack Mitigation
+- **Case-Insensitive Uniqueness:** PostgreSQL functional B-Tree index on `lower(username)` enforces uniqueness at the database engine level while preserving casing for display (`AdaAdmin`).
+- **Constant-Time BCrypt Verification:** When an unauthenticated visitor logs in with a non-existent email or username, the system performs a dummy BCrypt hash verification (`BCrypt::Password.create('', cost: ...)`), equalizing response times and eliminating username enumeration timing attacks.
+
+---
+
+### Production Scaling & Future Extensions
+
+When scaling this service to millions of users and high concurrent throughput, the existing architecture is primed for the following extensions:
+
+#### 1. PostgreSQL Read Replicas (Rails Multi-DB)
+Rails 8 natively supports primary/replica read-write splitting. By adding a replica configuration to `config/database.yml`:
+```yaml
+production:
+  primary:
+    adapter: postgresql
+    url: <%= ENV['DATABASE_URL'] %>
+  primary_replica:
+    adapter: postgresql
+    url: <%= ENV['DATABASE_REPLICA_URL'] %>
+    replica: true
+```
+All read-only cursor queries (`UsersController#index`, `UsersController#show`) automatically route to the replica pool, reserving primary database CPU for user sign-ups and profile updates.
+
+#### 2. Distributed Rate Limiting (Redis Sliding Window)
+To protect `/api/v1/sessions` and `/api/v1/registrations` against brute-force credential stuffing and registration spam, plug `rack-attack` directly into the existing Redis 8 cluster with sliding-window throttling:
+```ruby
+Rack::Attack.throttle('logins/ip', limit: 5, period: 60.seconds) do |req|
+  req.ip if req.path == '/api/v1/sessions' && req.post?
+end
+```
+
+#### 3. Asynchronous Outbox / Event Bus
+When users register or update profiles, emit domain events (`user.created`, `user.updated`) over Redis Streams, Kafka, or AWS SNS/SQS using Solid Queue or transactional outbox tables. Downstream services (notification services, billing, audit logs) react asynchronously without coupling to the user database.
+
+#### 4. Zero-Downtime Key Rotation Runbook
+The `Auth::KeySet` architecture supports simultaneous active keys. During rotation:
+1. Generate a new RSA private key (Key B).
+2. Add Key B's public key to the JWKS endpoint while Key A continues signing.
+3. Switch signing to Key B. Existing tokens signed with Key A remain valid until natural expiry (`expires_in: 900`).
+4. Retire Key A once all in-flight tokens expire.

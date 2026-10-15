@@ -1,111 +1,145 @@
-# User Service API
+# User Service
 
-A Rails 8 API-only service for managing users, secured with asymmetric RS256 JWT authentication and attribute-based/role-based authorization (Pundit).
+[![Ruby](https://img.shields.io/badge/Ruby-4.0.6-red.svg)](https://www.ruby-lang.org/)
+[![Rails](https://img.shields.io/badge/Rails-8.1-CC0000.svg)](https://rubyonrails.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791.svg)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-8.10-DC382D.svg)](https://redis.io/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8.3-646CFF.svg)](https://vitejs.dev/)
+
+A production-grade **Rails 8 API + React SPA** user management system built with asymmetric **RS256 JWT** authentication, attribute-based and role-based access control (**Pundit ABAC/RBAC**), zero-offset **keyset cursor pagination** with Redis ID caching, real-time username search, public registration, and modern Docker Compose deployment with **PostgreSQL 17** and **Redis 8**.
 
 ---
 
-## Architecture & Design Highlights
+## Architecture Overview
 
-### 1. User Domain Model
-- **Username:** Preserves casing for display (`JDoe`), but enforces case-insensitive uniqueness at both the model validation layer and the database engine layer via an expression index (`lower(username)`). Disallows `@` to ensure logins are never ambiguous.
-- **Password:** Uses BCrypt (`has_secure_password`) with an 8-character minimum.
-- **Date of Birth:** Optional (nullable). When provided, validates that it must be strictly in the past.
-- **Role:** Enum (`member: 0`, `admin: 1`), defaulting to `member`.
+```mermaid
+graph TD
+    Client["React 19 SPA (Vite + TypeScript)<br/>:5173"]
+    API["Rails 8 API Server (Puma)<br/>:3000"]
+    PG[("PostgreSQL 17<br/>Primary Store")]
+    Redis[("Redis 8<br/>Keyset ID & Data Cache")]
+    Gateway["API Gateway / External Verifier<br/>(RFC 7638 JWKS)"]
 
-### 2. Field Visibility & Authorization (RBAC + ABAC)
-- **Private Fields:** `email` and `date_of_birth` are classified as sensitive PII.
-- **Visibility Rules:** Only **admins** or the **user viewing their own profile** can view private fields.
-- **Serialization ([UserSerializer](app/serializers/user_serializer.rb)):** Unauthorized viewers see private field keys completely omitted from the JSON payload (rather than sent as `null`), so clients can clearly distinguish between hidden fields and an unset date of birth.
-- **Clean JWT Payload:** The JWT carries **no PII** (only `sub` and `role`).
+    Client -->|"RS256 Bearer JWT + REST JSON"| API
+    API -->|"CRUD Queries & Expression Index"| PG
+    API -->|"Keyset Candidate IDs & Caching"| Redis
+    Gateway -->|"GET /.well-known/jwks.json"| API
+```
 
-### 3. Asymmetric JWT Authentication (RS256)
-- **Token Signing:** Tokens are signed using an RSA 2048-bit private key.
-- **Deterministic Key ID (`kid`):** Derived deterministically from the public key using RFC 7638 JWK thumbprint (`JWT::JWK.new(key).kid`), ensuring zero-config consistency between token headers and JWKS.
-- **Public JWKS Endpoint:** `GET /.well-known/jwks.json` serves the public key set for token verification.
+---
+
+## Architectural Highlights
+
+### 1. Asymmetric RS256 JWT Authentication
+- **Private Key Signing:** Tokens are signed using an RSA 2048-bit private key.
+- **RFC 7638 Deterministic `kid`:** The Key ID header (`kid`) is computed directly from the SHA-256 JWK thumbprint of the public key (`JWT::JWK.new(key).kid`), ensuring zero-config alignment between issued token headers and JWKS.
+- **Zero-PII Token Payload:** The JWT claims only carry standard claims (`sub`, `iss`, `aud`, `exp`, `nbf`, `iat`, `jti`) and authorization context (`role`). No sensitive PII (`email`, `date_of_birth`) ever lives in the token.
+- **Public JWKS Endpoint:** `GET /.well-known/jwks.json` serves the public key set so downstream microservices and edge API Gateways can independently verify tokens without database hits.
 - **Swappable Verifier Seam (`Auth.verifier`):**
-  - **Local (Current):** `Auth::Verifiers::Local` verifies token signatures and standard claims against `Auth.key_set.to_jwks`.
-  - **Gateway (Future):** `Auth::Verifiers::Gateway` can be swapped via `AUTH_VERIFIER=gateway` to trust identity headers forwarded by an API Gateway (e.g. AWS API Gateway HTTP API or Kong) that verifies the JWT at the edge.
-- **Zero-Downtime Key Rotation:** `Auth::KeySet` accepts previous public/private keys to verify active in-flight tokens while a newly rotated key signs new logins.
+  - **Local Verifier (`Auth::Verifiers::Local`):** In-process cryptographically verifies token signatures against `Auth.key_set.to_jwks`.
+  - **Gateway Verifier (`Auth::Verifiers::Gateway`):** Configurable via `AUTH_VERIFIER=gateway` to trust upstream identity headers (`X-User-Id`, `X-User-Role`) injected by an API Gateway (AWS HTTP API, Kong, Envoy) that verified the JWT at the perimeter.
+
+### 2. Authorization & Field-Level Visibility (RBAC + ABAC)
+- **Role Hierarchy:** Two roles: `member` and `admin`.
+- **Attribute-Based Masking:** `email` and `date_of_birth` are strictly private PII.
+- **Field Omission vs Null:** When a member views other users, private field keys are completely stripped from the JSON response by `UserSerializer` rather than set to `null`, ensuring clients can clearly differentiate between an unprovided field and an unauthorized field.
+- **Role Escalation Protection:** Only administrators can promote or demote user roles. Public sign-up strictly creates `member` accounts.
+
+### 3. Pure Keyset Cursor Pagination
+- **Zero `OFFSET` Penalty:** Conventional `OFFSET N` scans and discards $N$ records ($O(N)$ penalty). Our service implements pure keyset cursor pagination (`WHERE id > cursor_id`), operating in **strictly $O(1)$ constant time** regardless of depth.
+- **Zero `COUNT(*)` Queries:** The service plucks `limit + 1` primary key IDs. If result count exceeds `limit`, `has_next_page` is true and the last record ID is Base64 URL-safe encoded into an opaque cursor token.
+- **Redis ID Caching:** The array of candidate IDs for each cursor and query is cached in Redis (`users:cursor_ids:cursor=...`) for 5 minutes, eliminating redundant database scans on repeated navigation.
+- **Live Search Query Integration:** Searching by username (`WHERE lower(username) LIKE ? AND id > ?`) preserves pure keyset cursor pagination.
 
 ---
 
-## Getting Started
+## Docker Compose Quickstart (PostgreSQL 17 + Redis 8)
+
+The fastest way to boot the full production-like environment with **PostgreSQL 17**, **Redis 8**, the **Rails 8 API**, and the **React SPA**:
+
+```sh
+# 1. Clone the repository
+git clone https://github.com/jaspervanbrian/user_service.git
+cd user_service
+
+# 2. Build and boot all containers
+docker compose up --build
+```
+
+### Services Started:
+| Service | Image | Internal Port | Host Port | Description |
+|---|---|---|---|---|
+| **`client`** | `nginx:1.27-alpine` (multi-stage Bun build) | 80 | **`5173`** | React 19 SPA Frontend |
+| **`api`** | `ruby:4.0.6-slim` | 3000 | **`3000`** | Rails 8 API Engine |
+| **`db`** | `postgres:17-alpine` | 5432 | **`5432`** | PostgreSQL 17 Database |
+| **`redis`** | `redis:8-alpine` | 6379 | **`6379`** | Redis 8 Cache Store |
+
+Once booted:
+- **Frontend SPA:** Open [http://localhost:5173](http://localhost:5173) in your browser.
+- **Backend API:** Accessible at [http://localhost:3000](http://localhost:3000).
+- **Auto-migration & Seeding:** The container automatically runs `rails db:prepare` and seeds default demo users upon startup.
+
+To stop the containers:
+```sh
+docker compose down
+```
+
+---
+
+## Local Development (Zero Docker / SQLite Option)
+
+You can also run the application locally without Docker. The app automatically defaults to SQLite and in-memory caching if PostgreSQL and Redis are not running.
 
 ### Prerequisites
-- **Ruby:** 4.0+ (managed via `mise` or your preferred Ruby version manager)
-- **SQLite3:** (Runs in WAL mode with `synchronous = NORMAL`)
+- **Ruby:** 4.0+ (managed via `mise` or your preferred version manager)
+- **Bun** (or Node.js 20+): For building and running the React SPA
 
-### 1. Install Dependencies
+### 1. Install Backend Dependencies
 ```sh
 bundle install
 ```
 
-### 2. Database Setup & Seeds
+### 2. Setup Database & Seeds
 ```sh
 bin/rails db:setup
-# Or manually:
-bin/rails db:migrate
-bin/rails db:seed
 ```
 
-### 3. Configure JWT Signing Key
-You can configure the RSA private key using either of the following options:
-
-#### Option A: Using OpenSSL + Rails Encrypted Credentials
-1. Generate an RSA 2048-bit private key:
-   ```sh
-   openssl genrsa 2048
-   ```
-2. Open credentials in your editor:
-   ```sh
-   bin/rails credentials:edit
-   ```
-3. Add the issuer and private key:
-   ```yaml
-   issuer: http://localhost:3000
-   private_key: |
-     -----BEGIN RSA PRIVATE KEY-----
-     ...
-     -----END RSA PRIVATE KEY-----
-   ```
-
-#### OR Option B: Using the CLI Key Generator Script
-Run the helper script to generate a key and format it for `.env` or credentials:
+### 3. Start Backend Server
 ```sh
-bin/generate-jwt-key
+bin/rails server -p 3000
 ```
-You can then paste `JWT_PRIVATE_KEY` directly into your `.env` or environment configuration.
 
----
-
-## Running the Application
-
-Start the Puma API server:
+### 4. Start Frontend SPA
+In a separate terminal:
 ```sh
-bin/rails server
+cd client
+bun install   # or npm install
+bun run dev   # or npm run dev
 ```
-The server will run on `http://localhost:3000`.
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
 ## Default Sample Accounts (Seeded)
 
-The database seed provides 17 test accounts (all passwords are set to `password123`):
+The database seed provides pre-configured demo accounts (all passwords are set to `password123`):
 
-| Username | Email | Role | Date of Birth |
-|---|---|---|---|
-| `AdaAdmin` | `ada.admin@example.com` | `admin` | `1990-01-15` |
-| `AlanAdmin` | `alan.admin@example.com` | `admin` | `1988-06-23` |
-| `grace_h` | `grace.hopper@example.com` | `member` | `1992-12-09` |
-| `LinusT` | `linus@example.com` | `member` | `1989-12-28` |
-| `matz` | `matz@example.com` | `member` | *(none / null)* |
+| Username | Email | Role | Date of Birth | Description |
+|---|---|---|---|---|
+| `AdaAdmin` | `ada.admin@example.com` | `admin` | `1990-01-15` | Full administrative privileges |
+| `AlanAdmin` | `alan.admin@example.com` | `admin` | `1988-06-23` | Secondary administrator |
+| `grace_h` | `grace.hopper@example.com` | `member` | `1992-12-09` | Standard member |
+| `LinusT` | `linus@example.com` | `member` | `1989-12-28` | Standard member |
+| `matz` | `matz@example.com` | `member` | *(none / null)* | Member with optional DOB omitted |
 
 ---
 
-## API Endpoints
+## API Reference
 
-### 1. Public JWKS
-Returns the active public JSON Web Key Set used by verifiers and API Gateways.
+### 1. Public RFC 7638 JWKS
+Returns the active public JSON Web Key Set used by token verifiers and API Gateways.
 
 ```sh
 curl http://localhost:3000/.well-known/jwks.json
@@ -125,8 +159,51 @@ curl http://localhost:3000/.well-known/jwks.json
 }
 ```
 
-### 2. Login (Create Session)
-Authenticates a user via **username** or **email** and password. Employs constant-time dummy BCrypt hashing to prevent user enumeration timing attacks.
+---
+
+### 2. User Sign Up (Public Registration)
+Creates a new member account and automatically issues an asymmetric RS256 JWT session. Strictly enforces `member` role even if client passes elevated roles.
+
+```sh
+curl -X POST http://localhost:3000/api/v1/registrations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": {
+      "first_name": "Katherine",
+      "last_name": "Johnson",
+      "username": "kjohnson",
+      "email": "kjohnson@example.com",
+      "password": "password123",
+      "password_confirmation": "password123",
+      "date_of_birth": "1918-08-26"
+    }
+  }'
+```
+
+**Response (201 Created):**
+```json
+{
+  "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "user": {
+    "id": 18,
+    "username": "kjohnson",
+    "first_name": "Katherine",
+    "last_name": "Johnson",
+    "role": "member",
+    "email": "kjohnson@example.com",
+    "date_of_birth": "1918-08-26",
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}
+```
+
+---
+
+### 3. Login (Create Session)
+Authenticates a user via either **username** or **email** and password. Employs constant-time dummy BCrypt hashing to prevent user enumeration timing attacks.
 
 ```sh
 # Login by username
@@ -150,26 +227,30 @@ curl -X POST http://localhost:3000/api/v1/sessions \
     "id": 1,
     "username": "AdaAdmin",
     "first_name": "Ada",
-    "last_name": "Lovelace",
+    "last_name": "Admin",
     "role": "admin",
-    "created_at": "...",
-    "updated_at": "...",
     "email": "ada.admin@example.com",
-    "date_of_birth": "1990-01-15"
+    "date_of_birth": "1990-01-15",
+    "created_at": "...",
+    "updated_at": "..."
   }
 }
 ```
 
-### 3. List Users (Keyset Cursor Pagination & Custom Page Jumping)
-```sh
-# Fetch initial page (default 20, max 100)
-curl -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/v1/users?limit=10
+---
 
-# Fetch next page using opaque Base64 cursor (0 COUNT(*) queries, O(1) indexed lookup)
+### 4. List Users (Keyset Cursor & Live Search)
+Returns a page of users filtered by authorization policy. Supports limit bounds and real-time username search query.
+
+```sh
+# Initial page (default limit 20, max 100)
+curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limit=10"
+
+# Next page using opaque Base64 cursor (O(1) indexed seek, 0 COUNT queries)
 curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limit=10&cursor=eyJpZCI6MTB9"
 
-# Jump directly to custom page number
-curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limit=10&page=3"
+# Filter by username search query
+curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?query=ada"
 ```
 
 **Response (200 OK):**
@@ -182,7 +263,7 @@ curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limi
       "first_name": "Ada",
       "last_name": "Admin",
       "role": "admin",
-      "email": "ada@example.com",
+      "email": "ada.admin@example.com",
       "date_of_birth": "1990-01-15",
       "created_at": "...",
       "updated_at": "..."
@@ -191,104 +272,109 @@ curl -H "Authorization: Bearer <TOKEN>" "http://localhost:3000/api/v1/users?limi
   "pagination": {
     "next_cursor": "eyJpZCI6MTB9",
     "has_next_page": true,
-    "limit": 10,
-    "page": 1
+    "limit": 10
   }
 }
 ```
-*Note:* If viewed by a standard member, other users' `email` and `date_of_birth` fields are omitted completely from the payload.
+*Note:* Unauthorized viewers have `email` and `date_of_birth` completely omitted from other users' records.
 
-### 4. Get User Profile
+---
+
+### 5. Get User Profile
+Fetches a single user record by ID.
+
 ```sh
 curl -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/v1/users/1
 ```
 
-### 5. Create User (Admin Only)
+---
+
+### 6. Create User (Admin Only)
+Administrators can create users with any role.
+
 ```sh
 curl -X POST http://localhost:3000/api/v1/users \
   -H "Authorization: Bearer <ADMIN_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "user": {
-      "first_name": "Grace",
-      "last_name": "Hopper",
-      "username": "ghopper",
-      "email": "grace@example.com",
+      "first_name": "Margaret",
+      "last_name": "Hamilton",
+      "username": "mhamilton",
+      "email": "margaret@example.com",
       "password": "password123",
       "password_confirmation": "password123",
-      "role": "member"
+      "role": "admin"
     }
   }'
 ```
 
-### 6. Update User (Self or Admin)
+---
+
+### 7. Update User (Self or Admin)
+Users can update their own details. Only administrators can change `:role`.
+
 ```sh
 curl -X PATCH http://localhost:3000/api/v1/users/2 \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "user": {
-      "first_name": "Michael",
-      "last_name": "Updated"
+      "first_name": "Grace",
+      "last_name": "Brewster Hopper"
     }
   }'
 ```
-*Note:* Only administrators are permitted to update `:role`. Role updates from non-admins are filtered out by Pundit.
 
 ---
 
 ## High-Performance Bulk Seeding (50k - 100k Records)
 
-The app includes an optimized bulk generator in `db/seeds.rb` that seeds 50,000+ users in ~1.9s using a single precomputed BCrypt digest and chunked `User.insert_all`:
+The app includes an optimized bulk dataset generator in `db/seeds.rb` that generates 50,000+ users in ~1.9s using a single precomputed BCrypt digest and chunked `User.insert_all`:
 
 ```sh
-# Standard fast seed (17 core users)
+# Standard seed (17 core users)
 bin/rails db:seed
 
 # Bulk dataset generator (50,000 users)
 BULK_SEED=true bin/rails db:seed
 
-# Custom count (e.g. 10,000 users)
-BULK_SEED=true BULK_USERS_COUNT=10000 bin/rails db:seed
+# Custom count (e.g. 100,000 users)
+BULK_SEED=true BULK_USERS_COUNT=100000 bin/rails db:seed
 ```
 
 ---
 
-## React SPA Frontend (`client/`)
+## Environment Variables
 
-The application includes a responsive React SPA built with Vite, TypeScript, and React Router in [`client/`](client/).
-
-### Features:
-- **Authentication Guarding:** Visiting `/` redirects unauthenticated visitors to `/login`. Visiting `/login` while logged in redirects to `/`. Auto-logout on 401.
-- **Quick Demo Logins:** 1-click login buttons for Admin (`ada@example.com` / `password123`) and Member (`MikeM` / `password123`).
-- **ABAC/RBAC Visuals:** Clear policy banners. Private fields (`email`, `date_of_birth`) show a `🔒 Restricted` pill on unauthorized records.
-- **Custom Pagination Footer:** Supports previous / next keyset cursor navigation, per-page limit selection, and a direct page number jump box (`Page [ 3 ] Jump`).
-- **Edit & Create Modals:** Field-level validation error display matching Rails' 422 JSON errors.
-
-### Running the Frontend:
-```sh
-cd client
-bun install   # or npm install
-bun run dev   # or npm run dev
-```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Client Linting & Production Build:
-```sh
-cd client
-bun run lint   # Fast Oxlint validation (0 warnings)
-bun run build  # Typecheck and Vite bundle
-```
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | *(None / SQLite fallback)* | Connection URL for PostgreSQL (e.g. `postgres://user:pass@host:5432/dbname`) |
+| `REDIS_URL` | *(None / Memory store fallback)* | Connection URL for Redis 8 cache store (e.g. `redis://redis:6379/0`) |
+| `JWT_PRIVATE_KEY` | Rails credentials | RSA 2048-bit PEM private key used to sign session tokens |
+| `JWT_ISSUER` | `http://localhost:3000` | Issuer claim (`iss`) embedded in tokens and matched on verify |
+| `JWT_TTL_SECONDS` | `900` (15 mins) | Token lifetime duration in seconds |
+| `AUTH_VERIFIER` | `local` | `local` (in-process RSA verification) or `gateway` (edge identity trust) |
+| `VITE_API_URL` | `http://localhost:3000/api/v1` | API base endpoint consumed by the React SPA frontend |
 
 ---
 
-## Running Backend Tests & Linters
+## Testing & Quality Assurance
 
-- Run the full test suite (76 Minitest runs):
-  ```sh
-  bin/rails test
-  ```
-- Run the code style checker:
-  ```sh
-  bin/rubocop
-  ```
+### Run Rails Backend Tests
+Full automated Minitest suite covering authentication, RBAC authorization, Pundit scopes, registrations, sessions, and keyset pagination:
+```sh
+bin/rails test
+```
+
+### Run Ruby Linter (Omakase)
+```sh
+bin/rubocop
+```
+
+### Run Frontend Linter & Build
+```sh
+cd client
+bun run lint   # Oxlint (0 warnings, 0 errors)
+bun run build  # TypeScript typecheck & Vite production bundle
+```

@@ -45,6 +45,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       RAILS_LOG_TO_STDOUT: "true"
       SECRET_KEY_BASE: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_ISSUER: ${JWT_ISSUER:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy

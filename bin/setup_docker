@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "openssl"
+
+APP_ROOT = File.expand_path("..", __dir__)
+
+def system!(*args)
+  system(*args, exception: true)
+end
+
+FileUtils.chdir APP_ROOT do
+  puts "========================================================"
+  puts "  User Service - Docker Setup"
+  puts "========================================================"
+
+  # 1. Pre-flight Check: Verify Docker daemon upfront (Fail-Fast / Atomic)
+  puts "\n== 1. Checking Docker Daemon =="
+  unless system("docker info > /dev/null 2>&1")
+    abort "Error: Docker daemon is not running. Please start Docker Desktop and run bin/setup_docker again."
+  end
+  puts "✓ Docker is running"
+
+  # 2. Ensure .env exists from .env.example
+  puts "\n== 2. Preparing Environment Configuration =="
+  unless File.exist?(".env")
+    puts "Creating .env from .env.example..."
+    FileUtils.cp(".env.example", ".env")
+  end
+
+  # 3. Ensure JWT_PRIVATE_KEY is configured in .env
+  env_content = File.read(".env")
+  unless env_content.match?(/^JWT_PRIVATE_KEY=/)
+    puts "Generating 2048-bit RSA key for RS256 JWT auth..."
+    rsa = OpenSSL::PKey::RSA.generate(2048)
+    escaped_pem = rsa.to_pem.gsub("\n", '\n')
+    File.open(".env", "a") do |f|
+      f.puts "\n# Auto-generated development RS256 private key"
+      f.puts "JWT_PRIVATE_KEY=\"#{escaped_pem}\""
+    end
+    puts "✓ Saved persistent JWT_PRIVATE_KEY into .env"
+  end
+
+  # 4. Build Docker containers
+  puts "\n== 3. Building Docker Images =="
+  system!("docker compose build")
+
+  puts "\n========================================================"
+  puts "✓ Docker Setup & Build Complete!"
+  puts ""
+  puts "To start the application, run:"
+  puts "  docker compose up"
+  puts ""
+  puts "Once booted:"
+  puts "  - Frontend SPA: http://localhost:5173"
+  puts "  - Backend API:  http://localhost:3000"
+  puts "========================================================"
+end

@@ -40,12 +40,11 @@ A production-grade **Rails 8 API + React SPA** user management system built with
 The fastest way to boot the full production-like environment with **PostgreSQL 17**, **Redis 8**, the **Rails 8 API**, and the **React SPA**:
 
 ```sh
-# 1. Clone the repository
-git clone https://github.com/jaspervanbrian/user_service.git
-cd user_service
+# 1. Setup environment & build containers (validates Docker upfront)
+bin/setup_docker
 
-# 2. Build and boot all containers
-docker compose up --build
+# 2. Start the application
+docker compose up
 ```
 
 ### Services Started:
@@ -59,44 +58,28 @@ docker compose up --build
 Once booted:
 - **Frontend SPA:** Open [http://localhost:5173](http://localhost:5173) in your browser.
 - **Backend API:** Accessible at [http://localhost:3000](http://localhost:3000).
-- **Auto-migration & Seeding:** The container automatically runs `rails db:prepare` and seeds default demo users upon startup.
-
-To stop the containers:
-```sh
-docker compose down
-```
+- **Auto-migration & Seeding:** The container automatically runs `rails db:prepare` and `rails db:seed` upon initial boot.
 
 ---
 
 ## Local Development (Zero-Docker / SQLite Option)
 
-You can also run the application locally without Docker. The app automatically defaults to SQLite and in-memory caching if PostgreSQL and Redis are not running.
+You can also run the application locally without Docker using `mise`. The app automatically defaults to SQLite and in-memory caching if PostgreSQL and Redis are not running.
 
 ### Prerequisites
-- **Ruby:** 4.0+ (managed via `mise` or your preferred version manager)
-- **Bun** (or Node.js 20+): For building and running the React SPA
+- **mise:** [mise-en-place](https://mise.jdx.dev) for toolchain management (`curl https://mise.run | sh`)
 
-### 1. Install Backend Dependencies
+### One-Command Setup
 ```sh
-bundle install
+bin/setup
 ```
+This script validates `mise`, syncs toolchains (`ruby 4.0.6` & `bun`), configures `.env` with a 2048-bit RS256 key, installs gems and frontend packages, runs migrations and seeds, and starts the development server.
 
-### 2. Setup Database & Seeds
-```sh
-bin/rails db:setup
-```
-
-### 3. Start Backend Server
-```sh
-bin/rails server -p 3000
-```
-
-### 4. Start Frontend SPA
+### Start Frontend SPA
 In a separate terminal:
 ```sh
 cd client
-bun install   # or npm install
-bun run dev   # or npm run dev
+bun dev
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
@@ -498,14 +481,27 @@ curl -s -X PATCH http://localhost:3000/api/v1/users/3 \
 
 The app includes an optimized bulk dataset generator in `db/seeds.rb` that generates 50,000+ users in ~1.9s using a single precomputed BCrypt digest and chunked `User.insert_all`:
 
+### Running Seeds in Docker:
 ```sh
-# Standard seed (17 core users)
+# Standard seed (17 core users):
+docker compose exec api bin/rails db:seed
+
+# Bulk dataset generator (50,000 users in ~1.9s):
+docker compose exec -e BULK_SEED=true api bin/rails db:seed
+
+# Custom count (e.g. 100,000 users):
+docker compose exec -e BULK_SEED=true -e BULK_USERS_COUNT=100000 api bin/rails db:seed
+```
+
+### Running Seeds Locally (without Docker):
+```sh
+# Standard seed (17 core users):
 bin/rails db:seed
 
-# Bulk dataset generator (50,000 users)
+# Bulk dataset generator (50,000 users):
 BULK_SEED=true bin/rails db:seed
 
-# Custom count (e.g. 100,000 users)
+# Custom count (e.g. 100,000 users):
 BULK_SEED=true BULK_USERS_COUNT=100000 bin/rails db:seed
 ```
 

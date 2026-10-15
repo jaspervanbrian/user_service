@@ -24,6 +24,7 @@ A production-grade **Rails 8 API + React SPA** user management system built with
   - [5. Get User Profile](#5-get-user-profile)
   - [6. Create User (Admin Only)](#6-create-user-admin-only)
   - [7. Update User (Self or Admin)](#7-update-user-self-or-admin)
+- [Authorization & Security Verification (cURL Testing)](#authorization--security-verification-curl-testing)
 - [High-Performance Bulk Seeding (50k - 100k Records)](#high-performance-bulk-seeding-50k---100k-records)
 - [Environment Variables](#environment-variables)
 - [Testing & Quality Assurance](#testing--quality-assurance)
@@ -304,6 +305,192 @@ curl -X PATCH http://localhost:3000/api/v1/users/2 \
     }
   }'
 ```
+
+---
+
+## Authorization & Security Verification (cURL Testing)
+
+This guide provides real-world `curl` commands to test authentication, role-based authorization (RBAC), and attribute-based field masking (ABAC).
+
+### Setup: Obtain Tokens for Admin and Member
+
+```sh
+# 1. Obtain an Admin Token (AdaAdmin):
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"login": "AdaAdmin", "password": "password123"}' | jq -r .token)
+
+# 2. Obtain a Member Token (Grace Hopper):
+MEMBER_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"login": "grace.hopper@example.com", "password": "password123"}' | jq -r .token)
+```
+
+---
+
+### Scenario 1: Unauthenticated Request (Failure — 401 Unauthorized)
+Requesting a protected endpoint without an `Authorization` header returns HTTP 401 and includes the `WWW-Authenticate: Bearer` challenge header.
+
+```sh
+curl -i http://localhost:3000/api/v1/users
+```
+
+**HTTP Response:**
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer error="invalid_token"
+Content-Type: application/json
+
+{"error":"Missing authentication token"}
+```
+
+---
+
+### Scenario 2: Tampered or Invalid Token (Failure — 401 Unauthorized)
+Requesting with an altered or improperly signed JWT returns HTTP 401.
+
+```sh
+curl -i -H "Authorization: Bearer invalid.token.payload" http://localhost:3000/api/v1/users
+```
+
+**HTTP Response:**
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer error="invalid_token"
+Content-Type: application/json
+
+{"error":"Invalid token: Signature verification failed"}
+```
+
+---
+
+### Scenario 3: RBAC Privilege Enforcement (Failure — 403 Forbidden)
+A standard `member` attempts an admin-only action, such as creating a new user:
+
+```sh
+curl -i -X POST http://localhost:3000/api/v1/users \
+  -H "Authorization: Bearer $MEMBER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": {
+      "first_name": "Unauthorized",
+      "last_name": "Create",
+      "username": "unauthorized",
+      "email": "hacker@example.com",
+      "password": "password123"
+    }
+  }'
+```
+
+**HTTP Response:**
+```http
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+
+{"error":"You are not authorized to perform this action"}
+```
+
+---
+
+### Scenario 4: RBAC Success — Admin Action (Success — 201 Created)
+An `admin` executes the same action with elevated privileges:
+
+```sh
+curl -i -X POST http://localhost:3000/api/v1/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": {
+      "first_name": "Margaret",
+      "last_name": "Hamilton",
+      "username": "mhamilton",
+      "email": "margaret@example.com",
+      "password": "password123",
+      "password_confirmation": "password123",
+      "role": "admin"
+    }
+  }'
+```
+
+**HTTP Response:**
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "user": {
+    "id": 18,
+    "username": "mhamilton",
+    "first_name": "Margaret",
+    "last_name": "Hamilton",
+    "role": "admin",
+    "email": "margaret@example.com",
+    "date_of_birth": null,
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}
+```
+
+---
+
+### Scenario 5: ABAC Attribute Masking Verification (Success — 200 OK)
+Notice the difference in private field visibility (`email` and `date_of_birth`) between an Admin viewer and a Member viewer:
+
+```sh
+# View another user as Admin (private fields visible):
+curl -s -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:3000/api/v1/users/3 | jq .user
+```
+**Admin Output (sees private fields):**
+```json
+{
+  "id": 3,
+  "username": "grace_h",
+  "first_name": "Grace",
+  "last_name": "Hopper",
+  "role": "member",
+  "email": "grace.hopper@example.com",
+  "date_of_birth": "1992-12-09"
+}
+```
+
+```sh
+# View another user as Member (private fields stripped):
+curl -s -H "Authorization: Bearer $MEMBER_TOKEN" http://localhost:3000/api/v1/users/1 | jq .user
+```
+**Member Output (keys completely omitted, not null):**
+```json
+{
+  "id": 1,
+  "username": "AdaAdmin",
+  "first_name": "Ada",
+  "last_name": "Admin",
+  "role": "admin"
+}
+```
+
+---
+
+### Scenario 6: Privilege Escalation Prevention (Safe Parameter Filtering)
+A member attempts to elevate their own role to `admin` via profile update:
+
+```sh
+curl -s -X PATCH http://localhost:3000/api/v1/users/3 \
+  -H "Authorization: Bearer $MEMBER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"user": {"role": "admin", "first_name": "Grace"}}' | jq .user
+```
+
+**Output:**
+```json
+{
+  "id": 3,
+  "username": "grace_h",
+  "first_name": "Grace",
+  "role": "member"
+}
+```
+*(Role escalation is filtered out by Pundit `permitted_attributes`; the user remains a `member` while safe fields like `first_name` are updated).*
 
 ---
 

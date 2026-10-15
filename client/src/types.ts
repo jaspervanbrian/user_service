@@ -16,7 +16,7 @@ export interface PaginationMeta {
   next_cursor: string | null;
   has_next_page: boolean;
   limit: number;
-  page: number;
+  page?: number;
 }
 
 export interface UsersResponse {

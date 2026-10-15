@@ -75,14 +75,12 @@ export const api = {
     token: string,
     params: {
       cursor?: string | null;
-      page?: number | null;
       limit?: number;
       query?: string | null;
     } = {}
   ): Promise<UsersResponse> => {
     const searchParams = new URLSearchParams();
     if (params.cursor) searchParams.set('cursor', params.cursor);
-    if (params.page && params.page > 1) searchParams.set('page', params.page.toString());
     if (params.limit) searchParams.set('limit', params.limit.toString());
     if (params.query && params.query.trim()) searchParams.set('query', params.query.trim());
 

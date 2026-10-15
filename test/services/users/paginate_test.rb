@@ -71,14 +71,12 @@ class UsersPaginateTest < ActiveSupport::TestCase
     assert_equal 3, cached_ids.size # limit + 1
   end
 
-  test "navigates directly via page number" do
-    all_users = User.order(id: :asc).to_a
-    page2 = Users::Paginate.call(page: 2, limit: 1)
+  test "filters users by username query with cursor" do
+    result = Users::Paginate.call(query: "ada", limit: 10)
+    assert_equal 1, result[:users].size
+    assert_equal "AdaAdmin", result[:users].first.username
 
-    assert_equal 1, page2[:users].size
-    assert_equal all_users[1].id, page2[:users].first.id
-    assert_equal 2, page2[:pagination][:page]
-    assert page2[:pagination][:has_next_page]
-    assert page2[:pagination][:next_cursor].present?
+    empty_result = Users::Paginate.call(query: "nonexistent_query", limit: 10)
+    assert_empty empty_result[:users]
   end
 end

@@ -59,16 +59,6 @@ class UsersTest < ActionDispatch::IntegrationTest
     assert_empty body["users"].map { |u| u["id"] } & body2["users"].map { |u| u["id"] }
   end
 
-  test "index supports jumping to page number" do
-    get "/api/v1/users", params: { limit: 1, page: 2 }, headers: auth(@admin)
-    assert_response :success
-    body = response.parsed_body
-    assert_equal 1, body["users"].size
-    assert_equal 2, body["pagination"]["page"]
-    assert body["pagination"]["has_next_page"]
-    assert body["pagination"]["next_cursor"].present?
-  end
-
   test "index filters users by username query case-insensitively" do
     get "/api/v1/users", params: { query: "ada" }, headers: auth(@admin)
     assert_response :success

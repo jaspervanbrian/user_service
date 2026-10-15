@@ -5,7 +5,6 @@ module Api
         authorize User
         result = Users::Paginate.call(
           cursor: params[:cursor],
-          page: params[:page],
           limit: params[:limit],
           query: params[:query],
           scope: policy_scope(User)

@@ -20,7 +20,6 @@ export const UsersDashboardPage: React.FC = () => {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageJumpInput, setPageJumpInput] = useState("1");
   const [pageSize, setPageSize] = useState(10);
   const [searchInput, setSearchInput] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -42,10 +41,10 @@ export const UsersDashboardPage: React.FC = () => {
   const loadUsers = useCallback(
     async (opts: {
       cursor?: string | null;
-      page?: number | null;
+      targetPage?: number;
       limit?: number;
       query?: string | null;
-    }) => {
+    } = {}) => {
       if (!token) return;
 
       setLoading(true);
@@ -55,7 +54,6 @@ export const UsersDashboardPage: React.FC = () => {
         const queryToUse = opts.query !== undefined ? opts.query : activeQuery;
         const response = await api.getUsers(token, {
           cursor: opts.cursor,
-          page: opts.page,
           limit: opts.limit || pageSize,
           query: queryToUse,
         });
@@ -63,15 +61,14 @@ export const UsersDashboardPage: React.FC = () => {
         setUsers(response.users);
         setPagination(response.pagination);
 
-        const targetPage = opts.page || currentPage;
-        setCurrentPage(targetPage);
-        setPageJumpInput(targetPage.toString());
+        const page = opts.targetPage !== undefined ? opts.targetPage : currentPage;
+        setCurrentPage(page);
 
         // Cache the next page cursor if available
         if (response.pagination.next_cursor) {
           setCursorHistory((prev) => ({
             ...prev,
-            [targetPage + 1]: response.pagination.next_cursor,
+            [page + 1]: response.pagination.next_cursor,
           }));
         }
       } catch (err) {
@@ -101,8 +98,9 @@ export const UsersDashboardPage: React.FC = () => {
 
   // When activeQuery or pageSize changes, reset page & cursor history and fetch
   useEffect(() => {
+    setCurrentPage(1);
     setCursorHistory({ 1: null });
-    loadUsers({ cursor: null, page: 1, limit: pageSize, query: activeQuery });
+    loadUsers({ cursor: null, targetPage: 1, limit: pageSize, query: activeQuery });
   }, [activeQuery, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNextPage = () => {
@@ -110,7 +108,7 @@ export const UsersDashboardPage: React.FC = () => {
     const nextPage = currentPage + 1;
     loadUsers({
       cursor: pagination.next_cursor,
-      page: nextPage,
+      targetPage: nextPage,
       limit: pageSize,
     });
   };
@@ -119,31 +117,11 @@ export const UsersDashboardPage: React.FC = () => {
     if (currentPage <= 1) return;
     const prevPage = currentPage - 1;
     const cursor = cursorHistory[prevPage];
-    // If we have the cursor cached, use it; otherwise use page offset
-    if (cursor !== undefined) {
-      loadUsers({ cursor, page: prevPage, limit: pageSize });
-    } else {
-      loadUsers({ page: prevPage, limit: pageSize });
-    }
-  };
-
-  const handlePageJump = (e: React.FormEvent) => {
-    e.preventDefault();
-    const target = parseInt(pageJumpInput, 10);
-    if (isNaN(target) || target < 1) {
-      setPageJumpInput(currentPage.toString());
-      return;
-    }
-
-    if (target === currentPage) return;
-
-    // Check if we have the cursor for this target page
-    const cachedCursor = cursorHistory[target];
-    if (cachedCursor !== undefined) {
-      loadUsers({ cursor: cachedCursor, page: target, limit: pageSize });
-    } else {
-      loadUsers({ page: target, limit: pageSize });
-    }
+    loadUsers({
+      cursor: cursor !== undefined ? cursor : null,
+      targetPage: prevPage,
+      limit: pageSize,
+    });
   };
 
   const handleUserUpdated = (updatedUser: User) => {
@@ -166,8 +144,9 @@ export const UsersDashboardPage: React.FC = () => {
     // Reset search and reload first page
     setSearchInput("");
     setActiveQuery("");
+    setCurrentPage(1);
     setCursorHistory({ 1: null });
-    loadUsers({ page: 1, limit: pageSize, query: "" });
+    loadUsers({ cursor: null, targetPage: 1, limit: pageSize, query: "" });
   };
 
   return (
@@ -372,24 +351,9 @@ export const UsersDashboardPage: React.FC = () => {
                 <ChevronLeft size={14} style={{ marginRight: "2px" }} /> Prev
               </button>
 
-              <form onSubmit={handlePageJump} className="page-jump-form">
-                <span>Page</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={pageJumpInput}
-                  onChange={(e) => setPageJumpInput(e.target.value)}
-                  className="page-jump-input"
-                  title="Enter page number and press Jump or Enter"
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn btn-outline btn-sm"
-                >
-                  Jump
-                </button>
-              </form>
+              <span className="pagination-page-indicator">
+                Page <strong>{currentPage}</strong>
+              </span>
 
               <button
                 type="button"

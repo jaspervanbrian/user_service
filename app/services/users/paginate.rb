@@ -17,13 +17,12 @@ module Users
     MAX_LIMIT     = 100
     CACHE_TTL     = 5.minutes
 
-    def self.call(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all, query: nil)
-      new(cursor: cursor, page: page, limit: limit, scope: scope, query: query).call
+    def self.call(cursor: nil, limit: DEFAULT_LIMIT, scope: User.all, query: nil)
+      new(cursor: cursor, limit: limit, scope: scope, query: query).call
     end
 
-    def initialize(cursor: nil, page: nil, limit: DEFAULT_LIMIT, scope: User.all, query: nil)
+    def initialize(cursor: nil, limit: DEFAULT_LIMIT, scope: User.all, query: nil)
       @cursor    = cursor
-      @page_num  = normalize_page(page)
       @limit     = normalize_limit(limit)
       @query     = query.to_s.strip.downcase.presence
       @scope     = apply_search(scope, @query)
@@ -41,8 +40,7 @@ module Users
         pagination: {
           next_cursor: next_cursor_for(users, has_next_page: has_next_page),
           has_next_page: has_next_page,
-          limit: limit,
-          page: @page_num
+          limit: limit
         }
       }
     end
@@ -53,13 +51,9 @@ module Users
 
     def fetch_candidate_ids
       Rails.cache.fetch(cache_key, expires_in: CACHE_TTL) do
-        query = scope.order(id: :asc)
-        if cursor_id.present?
-          query = query.where("id > ?", cursor_id)
-        elsif @page_num > 1
-          query = query.offset((@page_num - 1) * limit)
-        end
-        query.limit(limit + 1).pluck(:id)
+        relation = scope.order(id: :asc)
+        relation = relation.where("id > ?", cursor_id) if cursor_id.present?
+        relation.limit(limit + 1).pluck(:id)
       end
     end
 
@@ -78,24 +72,14 @@ module Users
 
     def cache_key
       q_part = @query.present? ? ":q=#{Digest::MD5.hexdigest(@query)}" : ""
-      if cursor_id.present?
-        "users:cursor_ids:cursor=#{cursor_id}:limit=#{limit}#{q_part}"
-      elsif @page_num > 1
-        "users:cursor_ids:page=#{@page_num}:limit=#{limit}#{q_part}"
-      else
-        "users:cursor_ids:cursor=initial:limit=#{limit}#{q_part}"
-      end
+      cid = cursor_id.presence || "initial"
+      "users:cursor_ids:cursor=#{cid}:limit=#{limit}#{q_part}"
     end
 
     def apply_search(scope, query)
       return scope if query.blank?
 
       scope.where("lower(username) LIKE ?", "%#{query}%")
-    end
-
-    def normalize_page(page)
-      val = page.to_i
-      val.positive? ? val : 1
     end
 
     def normalize_limit(limit)

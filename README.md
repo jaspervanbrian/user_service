@@ -45,6 +45,13 @@ bin/setup_docker
 
 # 2. Start the application
 docker compose up
+
+# 3. (Optional) Seed with bulk dataset for pagination & load testing (in a separate terminal):
+# Default: 50,000 users in ~1.9s
+docker compose exec -e BULK_SEED=true api bin/rails db:seed
+
+# Custom count (e.g. 10,000 or 100,000 users):
+docker compose exec -e BULK_SEED=true -e BULK_USERS_COUNT=100000 api bin/rails db:seed
 ```
 
 ### Services Started:
